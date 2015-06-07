@@ -1,0 +1,432 @@
+#include <net/genetlink.h>
+
+
+#include "netlink.h"
+#include "packet.h"
+#include "netfilter.h"
+
+static int superman_discovery_request(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	SendDiscoveryRequest();
+	return 0;
+}
+
+static int superman_certificate_exchange(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+static int superman_authenticated_sk_request(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+static int superman_authenticated_sk_response(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+static int superman_sk_invalidate(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+static int superman_broadcast_key_exchange(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+static int superman_encrypt_p2p(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+static int superman_decrypt_p2p(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+static int superman_encrypt_broadcast(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+static int superman_decrypt_broadcast(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+
+static struct genl_family superman_genl_family = {
+	.id = GENL_ID_GENERATE,
+	.hdrsize = 0,
+	.name = "SUPERMAN",
+	.version = 1,
+	.maxattr = SUPERMAN_ATTR_MAX,
+};
+
+/* operation definition */
+static struct genl_ops superman_ops[10] = {
+	{
+		.cmd = SUPERMAN_DISCOVERY_REQUEST,
+		.flags = 0,
+		.policy = 0, // superman_discovery_request_genl_policy,
+		.doit = superman_discovery_request,
+		.dumpit = NULL,
+	}, {
+		.cmd = SUPERMAN_CERTIFICATE_EXCHANGE,
+		.flags = 0,
+		.policy = superman_certificate_exchange_genl_policy,
+		.doit = superman_certificate_exchange,
+		.dumpit = NULL,
+	}, {
+		.cmd = SUPERMAN_AUTHENTICATED_SK_REQUEST,
+		.flags = 0,
+		.policy = superman_authenticated_sk_request_genl_policy,
+		.doit = superman_authenticated_sk_request,
+		.dumpit = NULL,
+	}, {
+		.cmd = SUPERMAN_AUTHENTICATED_SK_RESPONSE,
+		.flags = 0,
+		.policy = superman_authenticated_sk_response_genl_policy,
+		.doit = superman_authenticated_sk_response,
+		.dumpit = NULL,
+	}, {
+		.cmd = SUPERMAN_SK_INVALIDATE,
+		.flags = 0,
+		.policy = superman_sk_invalidate_genl_policy,
+		.doit = superman_sk_invalidate,
+		.dumpit = NULL,
+	}, {
+		.cmd = SUPERMAN_BROADCAST_KEY_EXCHANGE,
+		.flags = 0,
+		.policy = superman_broadcast_key_exchange_genl_policy,
+		.doit = superman_broadcast_key_exchange,
+		.dumpit = NULL,
+	}, {
+		.cmd = SUPERMAN_ENCRYPT_P2P,
+		.flags = 0,
+		.policy = superman_encrypt_p2p_genl_policy,
+		.doit = superman_encrypt_p2p,
+		.dumpit = NULL,
+	}, {
+		.cmd = SUPERMAN_DECRYPT_P2P,
+		.flags = 0,
+		.policy = superman_decrypt_p2p_genl_policy,
+		.doit = superman_decrypt_p2p,
+		.dumpit = NULL,
+	}, {
+		.cmd = SUPERMAN_ENCRYPT_BROADCAST,
+		.flags = 0,
+		.policy = superman_encrypt_broadcast_genl_policy,
+		.doit = superman_encrypt_broadcast,
+		.dumpit = NULL,
+	}, {
+		.cmd = SUPERMAN_DECRYPT_BROADCAST,
+		.flags = 0,
+		.policy = superman_decrypt_broadcast_genl_policy,
+		.doit = superman_decrypt_broadcast,
+		.dumpit = NULL,
+	},
+};
+
+/*
+static int peer_pid;
+static struct sock* superman_nl;
+static DECLARE_MUTEX(superman_nl_sem);
+
+static struct sk_buff* superman_netlink_build_msg(int type, void *data, int len)
+{
+	unsigned char *old_tail;
+	size_t size = 0;
+	struct sk_buff *skb;
+	struct nlmsghdr *nlh;
+	void *m;
+
+	size = NLMSG_SPACE(len);
+
+	skb = alloc_skb(size, GFP_ATOMIC);
+
+	if (!skb)
+		goto nlmsg_failure;
+
+	old_tail = SKB_TAIL_PTR(skb);
+	nlh = NLMSG_PUT(skb, 0, 0, type, size - sizeof(*nlh));
+
+	m = NLMSG_DATA(nlh);
+
+	memcpy(m, data, len);
+	
+	nlh->nlmsg_len = SKB_TAIL_PTR(skb) - old_tail;
+	NETLINK_CB(skb).pid = 0;  // from kernel
+	
+	return skb;
+
+nlmsg_failure:
+	if (skb)
+		kfree_skb(skb);
+
+	printk(KERN_ERR "superman: error creating rt timeout message\n");
+
+	return NULL;
+}
+
+void kaodv_netlink_send_debug_msg(char *buf, int len)
+{
+	struct sk_buff *skb = NULL;
+
+	skb = superman_netlink_build_msg(SUPERMAN_DEBUG, buf, len);
+
+	if (skb == NULL) {
+		printk("superman_netlink: skb=NULL\n");
+		return;
+	}
+
+	netlink_broadcast(superman_nl, skb, peer_pid, SUPERMAN_GRP_NOTIFY, GFP_USER);
+}
+
+void superman_netlink_send_rt_msg(int type, __u32 src, __u32 dest)
+{
+	struct sk_buff *skb = NULL;
+	struct superman_rt_msg m;
+
+	memset(&m, 0, sizeof(m));
+
+	m.src = src;
+	m.dst = dest;
+
+	skb = superman_netlink_build_msg(type, &m, sizeof(struct superman_rt_msg));
+
+	if (skb == NULL) {
+		printk("superman_netlink: skb=NULL\n");
+		return;
+	}
+
+	netlink_broadcast(superman_nl, skb, 0, SUPERMAN_GRP_NOTIFY, GFP_USER);
+}
+
+void superman_netlink_send_rt_update_msg(int type, __u32 src, __u32 dest,
+				      int ifindex)
+{
+	struct sk_buff *skb = NULL;
+	struct superman_rt_msg m;
+
+	memset(&m, 0, sizeof(m));
+
+	m.type = type;
+	m.src = src;
+	m.dst = dest;
+	m.ifindex = ifindex;
+
+	skb = superman_netlink_build_msg(KAODVM_ROUTE_UPDATE, &m,
+				      sizeof(struct kaodv_rt_msg));
+
+	if (skb == NULL) {
+		printk("kaodv_netlink: skb=NULL\n");
+		return;
+	}
+	// netlink_unicast(kaodvnl, skb, peer_pid, MSG_DONTWAIT);
+	netlink_broadcast(kaodvnl, skb, 0, AODVGRP_NOTIFY, GFP_USER);
+}
+
+void kaodv_netlink_send_rerr_msg(int type, __u32 src, __u32 dest, int ifindex)
+{
+	struct sk_buff *skb = NULL;
+	struct kaodv_rt_msg m;
+
+	memset(&m, 0, sizeof(m));
+
+	m.type = type;
+	m.src = src;
+	m.dst = dest;
+	m.ifindex = ifindex;
+
+	skb = kaodv_netlink_build_msg(KAODVM_SEND_RERR, &m,
+				      sizeof(struct kaodv_rt_msg));
+
+	if (skb == NULL) {
+		printk("kaodv_netlink: skb=NULL\n");
+		return;
+	}
+	// netlink_unicast(kaodvnl, skb, peer_pid, MSG_DONTWAIT);
+	netlink_broadcast(kaodvnl, skb, 0, AODVGRP_NOTIFY, GFP_USER);
+}
+
+static int kaodv_netlink_receive_peer(unsigned char type, void *msg,
+				      unsigned int len)
+{
+	int ret = 0;
+	struct kaodv_rt_msg *m;
+	struct kaodv_conf_msg *cm;
+	struct expl_entry e;
+
+	KAODV_DEBUG("Received msg: %s", kaodv_msg_type_to_str(type));
+
+	switch (type) {
+	case KAODVM_ADDROUTE:
+		if (len < sizeof(struct kaodv_rt_msg))
+			return -EINVAL;
+
+		m = (struct kaodv_rt_msg *)msg;
+
+		ret = kaodv_expl_get(m->dst, &e);
+
+		if (ret < 0) {
+			ret = kaodv_expl_update(m->dst, m->nhop, m->time,
+						m->flags, m->ifindex);
+		} else {
+			ret = kaodv_expl_add(m->dst, m->nhop, m->time,
+					     m->flags, m->ifindex);
+		}
+		kaodv_queue_set_verdict(KAODV_QUEUE_SEND, m->dst);
+		break;
+	case KAODVM_DELROUTE:
+		if (len < sizeof(struct kaodv_rt_msg))
+			return -EINVAL;
+
+		m = (struct kaodv_rt_msg *)msg;
+		kaodv_expl_del(m->dst);
+		kaodv_queue_set_verdict(KAODV_QUEUE_DROP, m->dst);
+		break;
+	case KAODVM_NOROUTE_FOUND:
+		if (len < sizeof(struct kaodv_rt_msg))
+			return -EINVAL;
+
+		m = (struct kaodv_rt_msg *)msg;
+		KAODV_DEBUG("No route found for %s", print_ip(m->dst));
+		kaodv_queue_set_verdict(KAODV_QUEUE_DROP, m->dst);
+		break;
+	case KAODVM_CONFIG:
+		if (len < sizeof(struct kaodv_conf_msg))
+			return -EINVAL;
+
+		cm = (struct kaodv_conf_msg *)msg;
+		active_route_timeout = cm->active_route_timeout;
+		qual_th = cm->qual_th;
+		is_gateway = cm->is_gateway;
+		break;
+	default:
+		printk("kaodv-netlink: Unknown message type\n");
+		ret = -EINVAL;
+	}
+	return ret;
+}
+
+static int kaodv_netlink_rcv_nl_event(struct notifier_block *this,
+				      unsigned long event, void *ptr)
+{
+	struct netlink_notify *n = ptr;
+
+
+	if (event == NETLINK_URELEASE && n->protocol == NETLINK_AODV && n->pid) {
+		if (n->pid == peer_pid) {
+			peer_pid = 0;
+			kaodv_expl_flush();
+			kaodv_queue_flush();
+		}
+		return NOTIFY_DONE;
+	}
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block kaodv_nl_notifier = {
+	.notifier_call = kaodv_netlink_rcv_nl_event,
+};
+
+#define RCV_SKB_FAIL(err) do { netlink_ack(skb, nlh, (err)); return; } while (0)
+
+static inline void kaodv_netlink_rcv_skb(struct sk_buff *skb)
+{
+	int status, type, pid, flags, nlmsglen, skblen;
+	struct nlmsghdr *nlh;
+
+	skblen = skb->len;
+	if (skblen < sizeof(struct nlmsghdr)) {
+		printk("skblen to small\n");
+		return;
+	}
+
+	nlh = (struct nlmsghdr *)skb->data;
+	nlmsglen = nlh->nlmsg_len;
+	
+	if (nlmsglen < sizeof(struct nlmsghdr) || skblen < nlmsglen) {
+		printk("nlsmsg=%d skblen=%d to small\n", nlmsglen, skblen);
+		return;
+	}
+
+	pid = nlh->nlmsg_pid;
+	flags = nlh->nlmsg_flags;
+
+	if (pid <= 0 || !(flags & NLM_F_REQUEST) || flags & NLM_F_MULTI)
+		RCV_SKB_FAIL(-EINVAL);
+
+
+	if (flags & MSG_TRUNC)
+		RCV_SKB_FAIL(-ECOMM);
+
+	type = nlh->nlmsg_type;
+
+#ifdef KERNEL26
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18))
+	if (security_netlink_recv(skb))
+		RCV_SKB_FAIL(-EPERM);
+#else
+	if (security_netlink_recv(skb, CAP_NET_ADMIN))
+		RCV_SKB_FAIL(-EPERM);
+#endif
+#endif
+	//write_lock_bh(&queue_lock);
+	
+	if (peer_pid) {
+		if (peer_pid != pid) {
+			//write_unlock_bh(&queue_lock);
+			RCV_SKB_FAIL(-EBUSY);
+		}
+	} else
+		peer_pid = pid;
+
+	//write_unlock_bh(&queue_lock);
+
+	status = kaodv_netlink_receive_peer(type, NLMSG_DATA(nlh),
+					    skblen - NLMSG_LENGTH(0));
+	if (status < 0)
+		RCV_SKB_FAIL(status);
+
+	if (flags & NLM_F_ACK)
+		netlink_ack(skb, nlh, 0);
+	return;
+}
+
+#if 0
+static void kaodv_netlink_rcv_sk(struct sock *sk, int len)
+{
+	do {
+		struct sk_buff *skb;
+
+		if (down_trylock(&kaodvnl_sem))
+			return;
+
+		while ((skb = skb_dequeue(&sk->sk_receive_queue)) != NULL) {
+			kaodv_netlink_rcv_skb(skb);
+			kfree_skb(skb);
+		}
+
+		up(&kaodvnl_sem);
+
+	} while (kaodvnl && kaodvnl->sk_receive_queue.qlen);
+
+	return;
+}
+#endif
+*/
+
+void InitNetlink(void)
+{
+	genl_register_family_with_ops(&superman_genl_family, superman_ops);
+}
+
+void DeInitNetlink(void)
+{
+	genl_unregister_family(&superman_genl_family);
+}
+

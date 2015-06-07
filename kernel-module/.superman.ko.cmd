@@ -1,0 +1,1 @@
+cmd_/home/wj88/kernel-module/superman.ko := ld -r -m elf_x86_64 -T /usr/src/linux-headers-3.13.0-52-generic/scripts/module-common.lds --build-id  -o /home/wj88/kernel-module/superman.ko /home/wj88/kernel-module/superman.o /home/wj88/kernel-module/superman.mod.o
