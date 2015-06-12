@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-void CheckForMessages(void);
+bool CheckForMessages(void);
 
 void UpdateSupermanSecurityTableEntry(uint32_t address, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp);
 void UpdateSupermanBroadcastKey(uint32_t broadcast_key_len, unsigned char* broadcast_key);

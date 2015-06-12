@@ -132,13 +132,14 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 	{
 		struct superman_header* shdr;
 		void* payload;
-		printk(KERN_INFO "SUPERMAN: Packet Received\n");
+		printk(KERN_INFO "SUPERMAN: Netfilter - Packet Received\n");
 
 		shdr = get_superman_header(skb);
 		payload = ((void*)shdr) + shdr->payload_len;
 		switch(shdr->type)
 		{
 			case SUPERMAN_DISCOVERY_REQUEST_TYPE:			// It's a Discovery Request
+				printk(KERN_INFO "SUPERMAN: Netfilter - Discovery Request Packet.\n");
 				ReceivedSupermanDiscoveryRequest(ip_hdr(skb)->saddr, shdr->payload_len, payload);
 				//SendCertificateRequest(skb);			// Respond with the Certificate Request
 				return NF_DROP;					// Don't let a Discovery Request propogate higher up the stack

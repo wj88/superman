@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "superman.h"
 #include "netlink.h"
@@ -29,6 +30,7 @@ struct option longopts[] = {
 bool debug = false;
 bool is_daemon = false;
 bool keep_going = true;
+time_t last_discovery_request;
 
 char* ca_cert_filename = "/etc/superman/ca_certificate.pem";
 char* node_cert_filename = "/etc/superman/node_certificate.pem";
@@ -68,6 +70,7 @@ void signal_handler(int type)
 	case SIGHUP:
 	case SIGTERM:
 	default:
+		printf("\n");
 		keep_going = false;
 		break;
     }
@@ -119,62 +122,6 @@ bool ProcessArgs(int argc, char **argv)
 			case 't':
 				test_cert_filename = optarg;
 				break;
-/*
-			case 'f':
-				llfeedback = 1;
-				active_route_timeout = ACTIVE_ROUTE_TIMEOUT_LLF;
-				break;
-			case 'g':
-				rreq_gratuitous = !rreq_gratuitous;
-				break;
-			case 'i':
-				ifname = optarg;
-				break;
-			case 'j':
-				hello_jittering = !hello_jittering;
-				break;
-			case 'l':
-				log_to_file = !log_to_file;
-				break;
-			case 'n':
-				if (optarg && isdigit(*optarg)) {
-					receive_n_hellos = atoi(optarg);
-					if (receive_n_hellos < 2) {
-						fprintf(stderr, "-n should be at least 2!\n");
-						exit(-1);
-					}
-				}
-				break;
-			case 'o':
-				optimized_hellos = !optimized_hellos;
-				break;
-			case 'q':
-				if (optarg && isdigit(*optarg))
-					qual_threshold = atoi(optarg);
-				break;
-			case 'r':
-				if (optarg && isdigit(*optarg))
-					rt_log_interval = atof(optarg) * 1000;
-				break;
-			case 'u':
-				unidir_hack = !unidir_hack;
-				break;
-			case 'w':
-				internet_gw_mode = !internet_gw_mode;
-				break;
-			case 'x':
-				expanding_ring_search = !expanding_ring_search;
-				break;
-			case 'L':
-				local_repair = !local_repair;
-				break;
-			case 'D':
-				wait_on_reboot = !wait_on_reboot;
-				break;
-			case 'R':
-				ratelimit = !ratelimit;
-				break;
-*/
 			case 'V':
 				printf("\nSUPERMAN: v%d.%d © Faculty of Engineering and Science, University of Greenwich.\nAuthor: Dr Jodie Wetherall, <wj88@gre.ac.uk>\n\n", SUPERMAN_VERSION_MAJOR, SUPERMAN_VERSION_MINOR);
 				exit(0);
@@ -233,15 +180,45 @@ void Daemonise()
         // Daemon-specific initialization goes here
 }
 
+void InvokeSendDiscoveryRequest()
+{
+	int publickey_len = GetPublickeyLen();
+	printf("Main: Grabbing the public key of %i bytes...\n", publickey_len);
+	unsigned char* publickey = malloc(publickey_len);
+	GetPublickey(publickey);
+
+	printf("Main: Calling SendSupermanDiscoveryRequest...\n");
+	SendSupermanDiscoveryRequest(publickey_len, publickey);
+
+	free(publickey);
+}
+
 void Run()
 {
+	// Capture the time now.
+	time(&last_discovery_request);
+
         // The Big Loop
         while (keep_going) {
-        
+        	bool requires_sleep = true;
+
+		time_t timeNow;
+		time(&timeNow);
+		if(difftime(timeNow, last_discovery_request) >= 5.0)
+		{
+			time(&last_discovery_request);
+			InvokeSendDiscoveryRequest();
+		}
+
 		// Do some task here...
-		printf("Here!\n");
+		printf("Main: Checking for netlink messages...\n");
+		requires_sleep = !CheckForMessages();
            
-		sleep(2); // wait 2 seconds
+		if(requires_sleep)
+		{
+			printf("Main: ... going back to sleep.\n");
+			sleep(1); // wait 1 seconds
+		}
         }
 }
 
@@ -251,7 +228,9 @@ int main(int argc, char **argv)
 
 	printf("Main: Initialising security...\n");
 	if(!InitSecurity(ca_cert_filename, node_cert_filename, node_dh_privatekey_filename))
+	{
 		exit(EXIT_FAILURE);
+	}
 
 	if(!InitNetlink())
 	{
@@ -262,19 +241,11 @@ int main(int argc, char **argv)
 	if(strlen(test_cert_filename) > 0)
 		TestCertificate(test_cert_filename);
 	
-	if(false)
-	{
-
 	SetupSigHandlers();
 	if(is_daemon)
 		Daemonise();
 	
 	Run();
-
-	}
-
-	//InvokeSupermanDiscoveryRequest();
-	//VerifyCertificate(cert_data);
 
 	// Return success
 	DeInitNetlink();

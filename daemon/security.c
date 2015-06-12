@@ -28,6 +28,19 @@ EVP_PKEY*	node_privatekey		= NULL;
 DH*		node_privatekey_dh	= NULL;
 BIGNUM*		node_publickey		= NULL;
 
+int GetPublickeyLen()
+{
+	if(node_publickey != NULL)
+		return BN_num_bytes(node_publickey);
+	else
+		return 0;
+}
+
+void GetPublickey(unsigned char* dest)
+{
+	if(node_publickey != NULL && dest != NULL)
+		BN_bn2bin(node_publickey, dest); 
+}
 
 unsigned char* LoadFile(unsigned char* filename)
 {

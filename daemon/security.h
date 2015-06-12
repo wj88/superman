@@ -3,6 +3,9 @@
 
 #include "superman.h"
 
+int GetPublickeyLen();
+void GetPublickey(unsigned char* dest);
+
 bool VerifyCertificate(unsigned char* cert_data, unsigned char* node_share, int node_share_len);
 bool TestCertificate(unsigned char* cert_filename);
 bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_filename, unsigned char* node_dh_privatekey_filename);

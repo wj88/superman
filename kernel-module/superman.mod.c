@@ -39,18 +39,19 @@ __attribute__((section("__versions"))) = {
 	{ 0x27e1a049, __VMLINUX_SYMBOL_STR(printk) },
 	{ 0x1f1b453e, __VMLINUX_SYMBOL_STR(inet_select_addr) },
 	{ 0xe7fd6047, __VMLINUX_SYMBOL_STR(nla_put) },
+	{ 0x16305289, __VMLINUX_SYMBOL_STR(warn_slowpath_null) },
 	{ 0xf6c79f47, __VMLINUX_SYMBOL_STR(skb_push) },
 	{ 0x7e3d544, __VMLINUX_SYMBOL_STR(ip_route_me_harder) },
 	{ 0x7ca37acc, __VMLINUX_SYMBOL_STR(dev_get_by_index) },
 	{ 0x62878c7b, __VMLINUX_SYMBOL_STR(init_net) },
 	{ 0xd6e506b5, __VMLINUX_SYMBOL_STR(__alloc_skb) },
+	{ 0xd6bce3b7, __VMLINUX_SYMBOL_STR(netlink_broadcast) },
 	{ 0xf0fdf6cb, __VMLINUX_SYMBOL_STR(__stack_chk_fail) },
 	{ 0x4f391d0e, __VMLINUX_SYMBOL_STR(nla_parse) },
 	{ 0xc6206c6b, __VMLINUX_SYMBOL_STR(kfree_skb) },
 	{ 0xbdfb6dbb, __VMLINUX_SYMBOL_STR(__fentry__) },
 	{ 0x1a236d64, __VMLINUX_SYMBOL_STR(kmem_cache_alloc_trace) },
 	{ 0xf4ee8424, __VMLINUX_SYMBOL_STR(ip_route_output_flow) },
-	{ 0x514dad48, __VMLINUX_SYMBOL_STR(genlmsg_multicast_allns) },
 	{ 0xf6ebc03b, __VMLINUX_SYMBOL_STR(net_ratelimit) },
 	{ 0x5c3edd59, __VMLINUX_SYMBOL_STR(_raw_write_unlock_bh) },
 	{ 0xa877ee10, __VMLINUX_SYMBOL_STR(proc_create_data) },
@@ -71,4 +72,4 @@ __attribute__((section(".modinfo"))) =
 "depends=";
 
 
-MODULE_INFO(srcversion, "ED3D67B40C4B7A8459282C9");
+MODULE_INFO(srcversion, "0F5BCA9672B9281C201951A");

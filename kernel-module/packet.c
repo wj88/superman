@@ -20,12 +20,12 @@ static inline u_int8_t _decode_ip_protocol(u_int8_t superman_protocol)
 void SendDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
 {
 	struct net_device *dev;
-	printk(KERN_INFO "SUPERMAN: Discovery Request...\n");
+	printk(KERN_INFO "SUPERMAN: Packet - Discovery Request...\n");
 
-	printk(KERN_INFO "\tSUPERMAN: Locking dev_base\n");
+	printk(KERN_INFO "SUPERMAN: Packet - \tLocking dev_base\n");
 	read_lock(&dev_base_lock);
 
-	printk(KERN_INFO "\tSUPERMAN: Iterating netdev's\n");
+	printk(KERN_INFO "SUPERMAN: Packet - \tIterating netdev's\n");
 	for_each_netdev(&init_net, dev) {
 
 		struct sk_buff* tx_sk;
@@ -54,7 +54,7 @@ void SendDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
 		skb_reset_transport_header(tx_sk);
 		shdr->type = SUPERMAN_DISCOVERY_REQUEST_TYPE;					// We're preparing a discovery request packet.
 		shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
-		shdr->payload_len = 0;								// A discovery request has no payload.
+		shdr->payload_len = sk_len;							// A discovery request contains an SK.
 
 		// Setup the IP header
 		iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -76,21 +76,21 @@ void SendDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
 		flowi4_init_output(&fl, dev->ifindex, 0, 0, RT_SCOPE_UNIVERSE, 0, 0, iph->daddr, iph->saddr, 0, 0);
 		rt = ip_route_output_key(dev_net(dev), &fl);
 		if(IS_ERR(rt))
-			printk(KERN_INFO "\tSUPERMAN: Routing failed.\n");
+			printk(KERN_INFO "SUPERMAN: Packet - \tRouting failed.\n");
 		else
 		{
 			skb_dst_set(tx_sk, &rt->dst);
 			dst = skb_dst(tx_sk);
-			printk(KERN_INFO "\tSUPERMAN: Sending packet\n");
+			printk(KERN_INFO "SUPERMAN: Packet - \tSending packet\n");
 			tx_sk->dev = dst->dev;
 			dst->output(tx_sk);
 		}
 	}
 
-	printk(KERN_INFO "\tSUPERMAN: Unlocking dev_base\n");
+	printk(KERN_INFO "SUPERMAN: Packet - \tUnlocking dev_base\n");
 	read_unlock(&dev_base_lock);
 
-	printk(KERN_INFO "SUPERMAN: ... Discovery Request done.\n");
+	printk(KERN_INFO "SUPERMAN: Packet - ... Discovery Request done.\n");
 }
 
 
