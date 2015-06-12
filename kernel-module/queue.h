@@ -1,6 +1,8 @@
 #ifndef _SUPERMAN_QUEUE_H
 #define _SUPERMAN_QUEUE_H
 
+#include <linux/skbuff.h>
+
 #define SUPERMAN_QUEUE_DROP 1
 #define SUPERMAN_QUEUE_SEND 2
 

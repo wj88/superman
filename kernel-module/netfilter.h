@@ -1,6 +1,8 @@
 #ifndef __SUPERMAN_NETFILTER__
 #define __SUPERMAN_NETFILTER__
 
+#include <linux/skbuff.h>
+
 #include "superman.h"
 
 #ifndef NF_IP_PRE_ROUTING
@@ -21,11 +23,6 @@ bool is_valid_packet(struct sk_buff *skb);
 bool is_superman_packet(struct sk_buff* skb);
 struct superman_header* get_superman_header(struct sk_buff *skb);
 
-unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
-unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
-unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
-unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
-unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
 
 void InitNetFilter(void);
 void DeInitNetFilter(void);

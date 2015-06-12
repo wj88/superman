@@ -15,44 +15,25 @@
 #include "security.h"
 
 struct option longopts[] = {
-	{"debug", no_argument, NULL, 'D'},
-	{"daemon", no_argument, NULL, 'd'},
-	{"version", no_argument, NULL, 'V'},
-	{"help", no_argument, NULL, 'h'},
-	{0}
+	{ "ca_cert",	required_argument,	NULL,	'c' },
+	{ "node_cert",	required_argument,	NULL,	'n' },
+	{ "dh_privkey",	required_argument,	NULL,	'p' },
+	{ "test_cert",	required_argument,	NULL,	't' },
+	{ "debug",	no_argument,		NULL,	'D' },
+	{ "daemon",	no_argument,		NULL,	'd' },
+	{ "version",	no_argument,		NULL,	'V' },
+	{ "help",	no_argument,		NULL,	'h' },
+	{ 0,		0,			0,	0   }
 };
 
 bool debug = false;
 bool is_daemon = false;
 bool keep_going = true;
 
-char cert_data[] = "-----BEGIN CERTIFICATE-----\n\
-MIIEVDCCAzygAwIBAgIBATANBgkqhkiG9w0BAQsFADCBuDELMAkGA1UEBhMCVUsx\n\
-DzANBgNVBAgMBkxvbmRvbjESMBAGA1UEBwwJR3JlZW53aWNoMSAwHgYDVQQKDBdV\n\
-bml2ZXJzaXR5IG9mIEdyZWVud2ljaDErMCkGA1UECwwiRmFjdWx0eSBvZiBFbmdp\n\
-bmVlcmluZyBhbmQgU2NpZW5jZTEWMBQGA1UEAwwNZmVzLmdyZS5hYy51azEdMBsG\n\
-CSqGSIb3DQEJARYOd2o4OEBncmUuYWMudWswHhcNMTUwNTExMTYwMzUzWhcNMTYw\n\
-NTEwMTYwMzUzWjCBpDELMAkGA1UEBhMCVUsxDzANBgNVBAgMBkxvbmRvbjEgMB4G\n\
-A1UECgwXVW5pdmVyc2l0eSBvZiBHcmVlbndpY2gxKzApBgNVBAsMIkZhY3VsdHkg\n\
-b2YgRW5naW5lZXJpbmcgYW5kIFNjaWVuY2UxFjAUBgNVBAMMDWZlcy5ncmUuYWMu\n\
-dWsxHTAbBgkqhkiG9w0BCQEWDndqODhAZ3JlLmFjLnVrMIIBIjANBgkqhkiG9w0B\n\
-AQEFAAOCAQ8AMIIBCgKCAQEA1263NnLxYnHSlgbNswHz73mk5BMoDjHP2UjIvsB/\n\
-63jS3hq0f5nx29fK4HTAdtqFxpqnO+plmvEXxNGhVkkSM/j1COOU9ImpqPSWQQgD\n\
-R+DKzRapdJO5pLEeFuduFbKRrKCvJTa98ZMW/QaxwDVhNqhJW2E23BQ+bekeaG3u\n\
-5DRaBd+yQVV7Eu7qhyXCI2yIaVfscwAtunxfWhrj8UuQz9m+YmfscTL+uDeI9EKZ\n\
-6pK+3U0R/unqXgb3LEWLtsnPtcBXlO2bXV0OtL55/sooxvNYo81emuVTo1oLHopc\n\
-1uSfn819YucuNUpphB54KkqtY2lxrKS9yHl4KjE/MA/qkQIDAQABo3sweTAJBgNV\n\
-HRMEAjAAMCwGCWCGSAGG+EIBDQQfFh1PcGVuU1NMIEdlbmVyYXRlZCBDZXJ0aWZp\n\
-Y2F0ZTAdBgNVHQ4EFgQULRllWidc57HubD4PRFJ+mmeoaZswHwYDVR0jBBgwFoAU\n\
-Lm37i2Gvas4YXXxFjlIe7b/b/XswDQYJKoZIhvcNAQELBQADggEBAJzpj8F3Jazn\n\
-Bh11OcwjFwrEVzYE7eyhKdtjgVF7Op57S8mGJK7ION+53tQiPMq9p030OnCyW4k5\n\
-jApI842Ne46cE0/kwcGfpwSPomBE7MJaS1tVT8E3bf1Fwpfl39+N3J4eWRM5sJcZ\n\
-KLg+pXO7pdDh2H1UZmsHSsXovZZfhQJwtTWQeeBQ9OdWeMHYGfdYBKMj+4q1vNIG\n\
-DLQzugvURCI6IrxZPVnvWphllr2oWvXdUXHVZcf3afE/Md92MevLlHyj/LtuTfz0\n\
-PuI7/PnwzRoUxYwkREsUVoHeIWlsytAKy7rckyjtttGAQBah34ivS6MixUFUePhG\n\
-+GcMF9nbIPY=\n\
------END CERTIFICATE-----\n\
-";
+char* ca_cert_filename = "/etc/superman/ca_certificate.pem";
+char* node_cert_filename = "/etc/superman/node_certificate.pem";
+char* node_dh_privatekey_filename = "/etc/superman/node_dh_privatekey.pem";
+char* test_cert_filename = "";
 
 void usage(int status, char* progname)
 {
@@ -63,6 +44,10 @@ void usage(int status, char* progname)
 
     printf
 	("\nUsage: %s [-DdV?]\n\n"
+	 "-c, --ca_cert file	Location of the CA public certificate\n"
+	 "-n, --node_cert file	Location of this nodes public certificate\n"
+	 "-p, --dh_privkey file	Location of the DH private key file\n"
+	 "-t, --test_cert	Location of a certificate to check against\n"
 	 "-D, --Debug		Debug mode\n"
 	 "-d, --daemon		Daemon mode, i.e. detach from the console\n"
 	 "-V, --version		Show version\n"
@@ -109,7 +94,7 @@ bool ProcessArgs(int argc, char **argv)
 
 		int opt;
 		//opt = getopt_long(argc, argv, "i:fjln:dghoq:r:s:uwxDLRV", longopts, 0);
-		opt = getopt_long(argc, argv, "DdV", longopts, 0);
+		opt = getopt_long(argc, argv, "DdVc:n:p:t:", longopts, 0);
 
 		if (opt == EOF)
 			break;
@@ -121,6 +106,18 @@ bool ProcessArgs(int argc, char **argv)
 				debug = true;
 			case 'd':
 				is_daemon = true;
+				break;
+			case 'n':
+				node_cert_filename = optarg;
+				break;
+			case 'c':
+				ca_cert_filename = optarg;
+				break;
+			case 'p':
+				node_dh_privatekey_filename = optarg;
+				break;
+			case 't':
+				test_cert_filename = optarg;
 				break;
 /*
 			case 'f':
@@ -191,6 +188,9 @@ bool ProcessArgs(int argc, char **argv)
 	}
 }
 
+
+
+
 void Daemonise()
 {
         // Our process ID and Session ID
@@ -241,23 +241,44 @@ void Run()
 		// Do some task here...
 		printf("Here!\n");
            
-		sleep(2); // wait 30 seconds
+		sleep(2); // wait 2 seconds
         }
 }
 
 int main(int argc, char **argv)
 {
 	ProcessArgs(argc, argv);
+
+	printf("Main: Initialising security...\n");
+	if(!InitSecurity(ca_cert_filename, node_cert_filename, node_dh_privatekey_filename))
+		exit(EXIT_FAILURE);
+
+	if(!InitNetlink())
+	{
+		DeInitSecurity();
+		exit(EXIT_FAILURE);
+	}
+
+	if(strlen(test_cert_filename) > 0)
+		TestCertificate(test_cert_filename);
+	
+	if(false)
+	{
+
 	SetupSigHandlers();
 	if(is_daemon)
 		Daemonise();
 	
 	Run();
 
+	}
+
 	//InvokeSupermanDiscoveryRequest();
 	//VerifyCertificate(cert_data);
 
 	// Return success
+	DeInitNetlink();
+	DeInitSecurity();
 	exit(EXIT_SUCCESS);
 }
 

@@ -5,6 +5,13 @@
 
 #include "netfilter.h"
 #include "packet.h"
+#include "netlink.h"
+
+unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
+unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
+unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
+unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
+unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
 
 // Useful reference: http://phrack.org/issues/61/13.html
 
@@ -124,16 +131,20 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 	if(is_superman_packet(skb))
 	{
 		struct superman_header* shdr;
+		void* payload;
 		printk(KERN_INFO "SUPERMAN: Packet Received\n");
 
 		shdr = get_superman_header(skb);
+		payload = ((void*)shdr) + shdr->payload_len;
 		switch(shdr->type)
 		{
 			case SUPERMAN_DISCOVERY_REQUEST_TYPE:			// It's a Discovery Request
-				SendCertificateRequest(skb);			// Respond with the Certificate Request
+				ReceivedSupermanDiscoveryRequest(ip_hdr(skb)->saddr, shdr->payload_len, payload);
+				//SendCertificateRequest(skb);			// Respond with the Certificate Request
 				return NF_DROP;					// Don't let a Discovery Request propogate higher up the stack
 				break;
 
+/*
 			case SUPERMAN_CERTIFICATE_REQUEST_TYPE:			// It's a Certificate Request
 				SendCertificateResponse(skb);			// Respond with a Certififcate Response				
 				return NF_DROP;					// Don't let a Certificate Requestany propogate higher up the stack
@@ -179,6 +190,7 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 						return NF_DROP;			// Drop the packet
 				}
 				break;
+*/
 		}
 	}
 

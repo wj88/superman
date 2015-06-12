@@ -47,7 +47,8 @@ struct superman_footer {
 
 };
 
-void SendDiscoveryRequest(void);
+void SendDiscoveryRequest(uint32_t sk_len, unsigned char* sk);
+/*
 void SendCertificateRequest(struct sk_buff* rx_sk);
 void SendCertificateResponse(struct sk_buff* rx_sk);
 bool ReceiveCertificateExchange(struct sk_buff* rx_sk);
@@ -60,6 +61,7 @@ bool SendP2PPacket(struct sk_buff* tx_sk);
 bool SendE2EPacket(struct sk_buff* tx_sk);
 bool ReceiveP2PPacket(struct sk_buff* rx_sk);
 bool ReceiveE2EPacket(struct sk_buff* rx_sk);
+*/
 
 //struct sk_buff* EncapsulateSupermanPacket(struct sk_buff *skb, u_int8_t type, u_int16_t timestamp);
 //struct sk_buff* DecapsulateSupermanPacket(struct sk_buff *skb);

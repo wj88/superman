@@ -35,4 +35,4 @@ module_exit(DeInit);
 
 MODULE_AUTHOR("Dr Jodie Wetherall <wj88@gre.ac.uk>");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Not much yet.");
+MODULE_DESCRIPTION("Implementation of SUPERMAN (Security Under Pre-Existing Routing for Mobile Ad-hoc Networks).");

@@ -3,8 +3,10 @@
 
 #include "superman.h"
 
-bool GetCertificate(void** certificate, int* certificate_len);
-bool VerifyCertificate(char* cert_data);
+bool VerifyCertificate(unsigned char* cert_data, unsigned char* node_share, int node_share_len);
+bool TestCertificate(unsigned char* cert_filename);
+bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_filename, unsigned char* node_dh_privatekey_filename);
+void DeInitSecurity();
 
 #endif
 

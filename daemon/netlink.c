@@ -1,10 +1,11 @@
 #include "netlink.h"
 
-
 #ifdef __KERNEL__
 #include <linux/types.h>
 #include <linux/genetlink.h>
 #include <net/genetlink.h>
+
+#include "packet.h"
 #else
 //sudo apt-get install libnl-3-dev libnl-genl-3-dev
 #include <netlink/netlink.h>
@@ -12,637 +13,1193 @@
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
 #include <netlink/genl/mngt.h>
+
+static struct nl_sock *nlsk = NULL;
+static int superman_mc_group_id = -1;
+struct nl_cache *genl_cache = NULL;
+
 #endif
 
-#define K_SUPERMAN_FAMILYNAME "K_SUPERMAN"
-#define D_SUPERMAN_FAMILYNAME "D_SUPERMAN"
+#define K_SUPERMAN_FAMILY_NAME		"K_SUPERMAN"
+#define K_SUPERMAN_MC_GROUP_NAME	"K_SUPERMAN_GROUP"
 
 enum {
-	SUPERMAN_ATTR_ADDR,
-	SUPERMAN_ATTR_MSG_LEN,
-	SUPERMAN_ATTR_MSG,
-	__SUPERMAN_ATTR_MAX,
-#define SUPERMAN_ATTR_MAX (__SUPERMAN_ATTR_MAX - 1)
+// Local Kernel state updating from the Daemon
+	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY,
+#define K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY
+
+	K_UPDATE_SUPERMAN_BROADCAST_KEY,
+#define K_UPDATE_SUPERMAN_BROADCAST_KEY K_UPDATE_SUPERMAN_BROADCAST_KEY
+
+// Daemon instructing Kernel to send packets
+	K_SEND_SUPERMAN_DISCOVERY_REQUEST,
+#define K_SEND_SUPERMAN_DISCOVERY_REQUEST K_SEND_SUPERMAN_DISCOVERY_REQUEST
+
+	K_SEND_SUPERMAN_CERTIFICATE_REQUEST,
+#define K_SEND_SUPERMAN_CERTIFICATE_REQUEST K_SEND_SUPERMAN_CERTIFICATE_REQUEST
+
+	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE,
+#define K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE
+
+	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY,
+#define K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY
+
+	K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE,
+#define K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE
+
+	K_SEND_SUPERMAN_SK_INVALIDATE,
+#define K_SEND_SUPERMAN_SK_INVALIDATE K_SEND_SUPERMAN_SK_INVALIDATE
+
+// Kernel instructing the Daemon of a specialist received packet
+	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST,
+#define D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST
+
+	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST,
+#define D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST
+
+	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE,
+#define D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE
+
+	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY,
+#define D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY
+
+	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE,
+#define D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE
+
+	D_RECEIVED_SUPERMAN_SK_INVALIDATE,
+#define D_RECEIVED_SUPERMAN_SK_INVALIDATE D_RECEIVED_SUPERMAN_SK_INVALIDATE
+
+	D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE,
+#define D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE
+
+	__SUPERMAN_MAX,
+#define SUPERMAN_MAX __SUPERMAN_MAX
 };
 
 
-enum {
-	K_SUPERMAN_DISCOVERY_REQUEST,
-#define K_SUPERMAN_DISCOVERY_REQUEST K_SUPERMAN_DISCOVERY_REQUEST
-	__K_SUPERMAN_MAX,
-#define K_SUPERMAN_MAX __K_SUPERMAN_MAX
-};
+#define K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_NAME				"Update a security table entry"
+#define K_UPDATE_SUPERMAN_BROADCAST_KEY_NAME					"Update the broadcast Key"
 
-enum {
-	D_SUPERMAN_CERTIFICATE_EXCHANGE,
-#define D_SUPERMAN_CERTIFICATE_EXCHANGE D_SUPERMAN_CERTIFICATE_EXCHANGE
+#define K_SEND_SUPERMAN_DISCOVERY_REQUEST_NAME					"Send a discovery request"
+#define K_SEND_SUPERMAN_CERTIFICATE_REQUEST_NAME				"Send a certificate request"
+#define K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_NAME				"Send a certificate exchange"
+#define K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_NAME		"Send a certificate exchange (inc. broadcast key)"
+#define K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_NAME				"Send a broadcast key exchange"
+#define K_SEND_SUPERMAN_SK_INVALIDATE_NAME					"Send an SK invalidate"
 
-	D_SUPERMAN_AUTHENTICATED_SK_REQUEST,
-#define D_SUPERMAN_AUTHENTICATED_SK_REQUEST D_SUPERMAN_AUTHENTICATED_SK_REQUEST
-
-	D_SUPERMAN_AUTHENTICATED_SK_RESPONSE,
-#define D_SUPERMAN_AUTHENTICATED_SK_RESPONSE D_SUPERMAN_AUTHENTICATED_SK_RESPONSE
-
-	D_SUPERMAN_SK_INVALIDATE,
-#define D_SUPERMAN_SK_INVALIDATE D_SUPERMAN_SK_INVALIDATE
-
-	D_SUPERMAN_BROADCAST_KEY_EXCHANGE,
-#define D_SUPERMAN_BROADCAST_KEY_EXCHANGE D_SUPERMAN_BROADCAST_KEY_EXCHANGE
-
-	D_SUPERMAN_ENCRYPT_P2P,
-#define D_SUPERMAN_ENCRYPT_P2P D_SUPERMAN_ENCRYPT_P2P
-
-	D_SUPERMAN_DECRYPT_P2P,
-#define D_SUPERMAN_DECRYPT_P2P D_SUPERMAN_DECRYPT_P2P
-
-	D_SUPERMAN_ENCRYPT_BROADCAST,
-#define D_SUPERMAN_ENCRYPT_BROADCAST D_SUPERMAN_ENCRYPT_BROADCAST
-
-	D_SUPERMAN_DECRYPT_BROADCAST,
-#define D_SUPERMAN_DECRYPT_BROADCAST D_SUPERMAN_DECRYPT_BROADCAST
-
-	__D_SUPERMAN_MAX,
-#define D_SUPERMAN_MAX __D_SUPERMAN_MAX
-};
-
-#define K_SUPERMAN_DISCOVERY_REQUEST_NAME		"Discovery Request"
-#define D_SUPERMAN_CERTIFICATE_EXCHANGE_NAME		"Certificate Exchange"
-#define D_SUPERMAN_AUTHENTICATED_SK_REQUEST_NAME	"Authenticated SK Request"
-#define D_SUPERMAN_AUTHENTICATED_SK_RESPONSE_NAME	"Authenticated SK Response"
-#define D_SUPERMAN_SK_INVALIDATE_NAME			"SK Invalidate"
-#define D_SUPERMAN_BROADCAST_KEY_EXCHANGE_NAME		"Broadcast Key Exchange"
-#define D_SUPERMAN_ENCRYPT_P2P_NAME			"Encrypt P2P"
-#define D_SUPERMAN_DECRYPT_P2P_NAME			"Decrypt P2P"
-#define D_SUPERMAN_ENCRYPT_BROADCAST_NAME		"Encrypt Broadcast"
-#define D_SUPERMAN_DECRYPT_BROADCAST_NAME		"Decrypt Broadcast"
+#define D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_NAME				"Received a discovery request"
+#define D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_NAME				"Received a certificate request"
+#define D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_NAME				"Received a certificate exchange"
+#define D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_NAME	"Received a certificate exchange (inc. broadcast key)"
+#define D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_NAME			"Received an authenticated SK response"
+#define D_RECEIVED_SUPERMAN_SK_INVALIDATE_NAME					"Received an SK invalidate"
+#define D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_NAME				"Received a broadcast key exchange"
 
 static struct {
 	int type;
 	char *name;
-} k_typenames[K_SUPERMAN_MAX] = {
-	{ K_SUPERMAN_DISCOVERY_REQUEST,		K_SUPERMAN_DISCOVERY_REQUEST_NAME		},
+} superman_typenames[SUPERMAN_MAX] = {
+	{ K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY,			K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_NAME				},
+	{ K_UPDATE_SUPERMAN_BROADCAST_KEY,				K_UPDATE_SUPERMAN_BROADCAST_KEY_NAME					},
+	{ K_SEND_SUPERMAN_DISCOVERY_REQUEST,				K_SEND_SUPERMAN_DISCOVERY_REQUEST_NAME					},
+	{ K_SEND_SUPERMAN_CERTIFICATE_REQUEST,				K_SEND_SUPERMAN_CERTIFICATE_REQUEST_NAME				},
+	{ K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE,				K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_NAME				},
+	{ K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_NAME		},
+	{ K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE,			K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_NAME				},
+	{ K_SEND_SUPERMAN_SK_INVALIDATE,				K_SEND_SUPERMAN_SK_INVALIDATE_NAME					},
+	{ D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST,			D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_NAME				},
+	{ D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST,			D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_NAME				},
+	{ D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE,			D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_NAME				},
+	{ D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_NAME	},
+	{ D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE,		D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_NAME			},
+	{ D_RECEIVED_SUPERMAN_SK_INVALIDATE,				D_RECEIVED_SUPERMAN_SK_INVALIDATE_NAME					},
+	{ D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE,			D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_NAME				},
 };
 
-static struct {
-	int type;
-	char *name;
-} d_typenames[D_SUPERMAN_MAX] = {
-	{ D_SUPERMAN_CERTIFICATE_EXCHANGE,	D_SUPERMAN_CERTIFICATE_EXCHANGE_NAME		},
-	{ D_SUPERMAN_AUTHENTICATED_SK_REQUEST,	D_SUPERMAN_AUTHENTICATED_SK_REQUEST_NAME	},
-	{ D_SUPERMAN_AUTHENTICATED_SK_RESPONSE,	D_SUPERMAN_AUTHENTICATED_SK_RESPONSE_NAME	},
-	{ D_SUPERMAN_SK_INVALIDATE,		D_SUPERMAN_SK_INVALIDATE_NAME			},
-	{ D_SUPERMAN_BROADCAST_KEY_EXCHANGE,	D_SUPERMAN_BROADCAST_KEY_EXCHANGE_NAME		},
-	{ D_SUPERMAN_ENCRYPT_P2P,		D_SUPERMAN_ENCRYPT_P2P_NAME			},
-	{ D_SUPERMAN_DECRYPT_P2P,		D_SUPERMAN_DECRYPT_P2P_NAME			},
-	{ D_SUPERMAN_ENCRYPT_BROADCAST,		D_SUPERMAN_ENCRYPT_BROADCAST_NAME		},
-	{ D_SUPERMAN_DECRYPT_BROADCAST,		D_SUPERMAN_DECRYPT_BROADCAST_NAME		},
-};
-
-static inline char* k_superman_msg_type_to_str(int type)
+static inline char* superman_msg_type_to_str(int type)
 {
 	int i;
-	for (i = 0; i < K_SUPERMAN_MAX; i++) {
-		if (type == k_typenames[i].type) {
-			return k_typenames[i].name;
+	for (i = 0; i < SUPERMAN_MAX; i++) {
+		if (type == superman_typenames[i].type) {
+			return superman_typenames[i].name;
 		}
 	}
 	return "Unknown message type";
 }
 
-static inline char* d_superman_msg_type_to_str(int type)
-{
-	int i;
-	for (i = 0; i < D_SUPERMAN_MAX; i++) {
-		if (type == d_typenames[i].type) {
-			return d_typenames[i].name;
-		}
-	}
-	return "Unknown message type";
-}
-
-/*
-// A SUPERMAN discovery request message.
-static struct nla_policy superman_discovery_request_genl_policy[1] = {
+// K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY
+enum {
+	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_ADDRESS,
+	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_FLAG,
+	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SK,
+	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKE,
+	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP,
+	__K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_MAX,
+#define K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_MAX (__K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_MAX - 1)
+};
+typedef struct k_update_superman_security_table_entry_msg {
+	uint32_t	address;
+	uint8_t		flag;
+	uint32_t	sk_len;
+	unsigned char*	sk;
+	uint32_t	ske_len;
+	unsigned char*	ske;
+	uint32_t	skp_len;
+	unsigned char*	skp;
+} k_update_superman_security_table_entry_msg_t;
+static struct nla_policy k_update_superman_security_table_entry_genl_policy[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_MAX + 1] = {
+	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_ADDRESS]					=	{ .type = NLA_U32		},
+	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_FLAG] 					= 	{ .type = NLA_U8		},
+	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SK]					=	{ .type = NLA_UNSPEC	},
+	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKE]					=	{ .type = NLA_UNSPEC	},
+	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP]					=	{ .type = NLA_UNSPEC	},
 };
 
-// A SUPERMAN certificate exchange message.
-typedef struct superman_certificate_exchange_msg {
-	u_int32_t	addr;
-	u_int32_t	msg_len;
-	char*		msg;		// cert
-} superman_certificate_exchange_msg_t;
-static struct nla_policy superman_certificate_exchange_genl_policy[4] = {
-	[SUPERMAN_ATTR_ADDR]	=	{ .type = NLA_NUL_STRING },
-	[SUPERMAN_ATTR_MSG_LEN] = 	{ .type = NLA_U32 },
-	[SUPERMAN_ATTR_MSG]	=	{ .type = NLA_UNSPEC },
+// K_UPDATE_SUPERMAN_BROADCAST_KEY
+enum {
+	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY,
+	__K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MAX,
+#define K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MAX (__K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MAX - 1)
+};
+typedef struct k_update_superman_broadcast_key_msg {
+	uint32_t	broadcast_key_len;
+	unsigned char*	broadcast_key;
+} k_update_superman_broadcast_key_msg_t;
+static struct nla_policy k_update_superman_broadcast_key_genl_policy[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MAX + 1] = {
+	[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY]					=	{ .type = NLA_UNSPEC	},
+};
+
+// K_SEND_SUPERMAN_DISCOVERY_REQUEST
+enum {
+	K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,
+	__K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX,
+#define K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX (__K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX - 1)
+};
+typedef struct k_send_superman_discovery_request_msg {
+	uint32_t	sk_len;
+	unsigned char*	sk;
+} k_send_superman_discovery_request_msg_t;
+static struct nla_policy k_send_superman_discovery_request_genl_policy[K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX + 1] = {
+	[K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK]						=	{ .type = NLA_UNSPEC	},
+};
+
+// K_SEND_SUPERMAN_CERTIFICATE_REQUEST
+enum {
+	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,
+	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,
+	__K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX,
+#define K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX (__K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX - 1)
+};
+typedef struct k_send_superman_certificate_request_msg {
+	uint32_t	address;
+	uint32_t	sk_len;
+	unsigned char*	sk;
+} k_send_superman_certificate_request_msg_t;
+static struct nla_policy k_send_superman_certificate_request_genl_policy[K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX + 1] = {
+	[K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS]					=	{ .type = NLA_U32		},
+	[K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK]						=	{ .type = NLA_UNSPEC	},
+};
+
+// K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE
+enum {
+	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS,
+	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE,
+	__K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX,
+#define K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX (__K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX - 1)
+};
+typedef struct k_send_superman_certificate_exchange_msg {
+	uint32_t	address;
+	uint32_t	certificate_len;
+	unsigned char*	certificate;
+} k_send_superman_certificate_exchange_msg_t;
+static struct nla_policy k_send_superman_certificate_exchange_genl_policy[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX + 1] = {
+	[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS]					=	{ .type = NLA_U32		},
+	[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE]					=	{ .type = NLA_UNSPEC	},
+};
+
+// K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY
+enum {
+	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS,
+	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,
+	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY,
+	__K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX,
+#define K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX (__K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX - 1)
+};
+typedef struct k_send_superman_certificate_exchange_with_broadcast_key_msg {
+	uint32_t	address;
+	uint32_t	certificate_len;
+	unsigned char*	certificate;
+	uint32_t	broadcast_key_len;
+	unsigned char*	broadcast_key;
+} k_send_superman_certificate_exchange_with_broadcast_key_msg_t;
+static struct nla_policy k_send_superman_certificate_exchange_with_broadcast_key_genl_policy[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX + 1] = {
+	[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS]			=	{ .type = NLA_U32		},
+	[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE]		=	{ .type = NLA_UNSPEC	},
+	[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY]		=	{ .type = NLA_UNSPEC	},
+};
+
+// K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE
+enum {
+	K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY,
+	__K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX,
+#define K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX (__K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX - 1)
+};
+typedef struct k_send_superman_broadcast_key_exchange_msg {
+	uint32_t	broadcast_key_len;
+	unsigned char*	broadcast_key;
+} k_send_superman_broadcast_key_exchange_msg_t;
+static struct nla_policy k_send_superman_broadcast_key_exchange_genl_policy[K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX + 1] = {
+	[K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY]				=	{ .type = NLA_UNSPEC	},
+};
+
+// K_SEND_SUPERMAN_SK_INVALIDATE
+enum {
+	K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_ADDRESS,
+	__K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_MAX,
+#define K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_MAX (__K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_MAX - 1)
+};
+typedef struct k_send_superman_sk_invalidate_msg {
+	uint32_t	address;
+} k_send_superman_sk_invalidate_msg_t;
+static struct nla_policy k_send_superman_sk_invalidate_genl_policy[K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_MAX + 1] = {
+	[K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_ADDRESS]						=	{ .type = NLA_U32		},
+};
+
+// D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST
+enum {
+	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS,
+	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,
+	__D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX,
+#define D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX (__D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX - 1)
+};
+typedef struct d_received_superman_discovery_request_msg {
+	uint32_t	address;
+	uint32_t	sk_len;
+	unsigned char*	sk;
+} d_received_superman_discovery_request_msg_t;
+static struct nla_policy d_received_superman_discovery_request_genl_policy[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX + 1] = {
+	[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS]					=	{ .type = NLA_U32		},
+	[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK]						=	{ .type = NLA_UNSPEC	},
+};
+
+// D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST
+enum {
+	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,
+	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,
+	__D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX,
+#define D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX (__D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX - 1)
+};
+typedef struct d_received_superman_certificate_request_msg {
+	uint32_t	address;
+	uint32_t	sk_len;
+	unsigned char*	sk;
+} d_received_superman_certificate_request_msg_t;
+static struct nla_policy d_received_superman_certificate_request_genl_policy[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX + 1] = {
+	[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS]					=	{ .type = NLA_U32		},
+	[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK]					=	{ .type = NLA_UNSPEC	},
+};
+
+// D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE
+enum {
+	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS,
+	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE,
+	__D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX,
+#define D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX (__D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX - 1)
+};
+typedef struct d_received_superman_certificate_exchange_msg {
+	uint32_t	address;
+	uint32_t	certificate_len;
+	unsigned char*	certificate;
+} d_received_superman_certificate_exchange_msg_t;
+static struct nla_policy d_received_superman_certificate_exchange_genl_policy[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX + 1] = {
+	[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS]					=	{ .type = NLA_U32		},
+	[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE]				=	{ .type = NLA_UNSPEC	},
+};
+
+// D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY
+enum {
+	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS,
+	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,
+	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY,
+	__D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX,
+#define D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX (__D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX - 1)
+};
+typedef struct d_received_superman_certificate_exchange_with_broadcast_key_msg {
+	uint32_t	address;
+	uint32_t	certificate_len;
+	unsigned char*	certificate;
+	uint32_t	broadcast_key_len;
+	unsigned char*	broadcast_key;
+} d_received_superman_certificate_exchange_with_broadcast_key_msg_t;
+static struct nla_policy d_received_superman_certificate_exchange_with_broadcast_key_genl_policy[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX + 1] = {
+	[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS]		=	{ .type = NLA_U32		},
+	[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE]		=	{ .type = NLA_UNSPEC	},
+	[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY]	=	{ .type = NLA_UNSPEC	},
+};
+
+// D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE
+enum {
+	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_ADDRESS,
+	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_SK,
+	__D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_MAX,
+#define D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_MAX (__D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_MAX - 1)
+};
+typedef struct d_received_superman_authenticated_sk_response_msg {
+	uint32_t	address;
+	uint32_t	sk_len;
+	unsigned char*	sk;
+} d_received_superman_certificate_authenticated_sk_response_msg_t;
+static struct nla_policy d_received_superman_authenticated_sk_response_genl_policy[D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_MAX + 1] = {
+	[D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_ADDRESS]			=	{ .type = NLA_U32		},
+	[D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_SK]				=	{ .type = NLA_UNSPEC	},
+};
+
+// D_RECEIVED_SUPERMAN_SK_INVALIDATE
+enum {
+	D_RECEIVED_SUPERMAN_SK_INVALIDATE_ATTR_ADDRESS,
+	__D_RECEIVED_SUPERMAN_SK_INVALIDATE_ATTR_MAX,
+#define D_RECEIVED_SUPERMAN_SK_INVALIDATE_ATTR_MAX (__D_RECEIVED_SUPERMAN_SK_INVALIDATE_ATTR_MAX - 1)
+};
+typedef struct d_received_superman_sk_invalidate_msg {
+	uint32_t	address;
+} d_received_supermandsk_invalidate_msg_t;
+static struct nla_policy d_received_superman_sk_invalidate_genl_policy[D_RECEIVED_SUPERMAN_SK_INVALIDATE_ATTR_MAX + 1] = {
+	[D_RECEIVED_SUPERMAN_SK_INVALIDATE_ATTR_ADDRESS]				=	{ .type = NLA_U32		},
+};
+
+// D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE
+enum {
+	D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY,
+	__D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX,
+#define D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX (__D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX - 1)
+};
+typedef struct d_received_superman_broadcast_key_exchange_msg {
+	uint32_t	broadcast_key_len;
+	unsigned char*	broadcast_key;
+} d_received_superman_broadcast_key_exchange_msg_t;
+static struct nla_policy d_received_superman_broadcast_key_exchange_genl_policy[D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX + 1] = {
+	[D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY]			=	{ .type = NLA_U32		},
 };
 
 
-// A SUPERMAN authenticated SK request message.
-typedef struct superman_authenticated_sk_request_msg {
-	u_int32_t	addr;
-} superman_authenticated_sk_request_msg_t;
-static struct nla_policy superman_authenticated_sk_request_genl_policy[2] = {
-	[SUPERMAN_ATTR_ADDR]	=	{ .type = NLA_NUL_STRING },
-};
 
+#ifdef __KERNEL__
 
-// A SUPERMAN authenticated SK response message.
-typedef struct superman_authenticated_sk_response_msg {
-	u_int32_t	addr;
-	u_int32_t	msg_len;
-	char*		msg;		// sk
-} superman_authenticated_sk_response_msg_t;
-static struct nla_policy superman_authenticated_sk_response_genl_policy[4] = {
-	[SUPERMAN_ATTR_ADDR]	=	{ .type = NLA_NUL_STRING },
-	[SUPERMAN_ATTR_MSG_LEN] = 	{ .type = NLA_U32 },
-	[SUPERMAN_ATTR_MSG]	=	{ .type = NLA_UNSPEC },
-};
-
-
-// A SUPERMAN SK invalidate message.
-typedef struct superman_sk_invalidate_msg {
-	u_int32_t	addr;
-} superman_sk_invalidate_msg_t;
-static struct nla_policy superman_sk_invalidate_genl_policy[2] = {
-	[SUPERMAN_ATTR_ADDR]	=	{ .type = NLA_NUL_STRING },
-};
-
-
-// A SUPERMAN broadcast key exchange message.
-typedef struct superman_broadcast_key_exchange_msg {
-	u_int32_t	addr;
-	u_int32_t	msg_len;
-	char*		msg;		// broadcast key
-} superman_broadcast_key_exchange_msg_t;
-static struct nla_policy superman_broadcast_key_exchange_genl_policy[4] = {
-	[SUPERMAN_ATTR_ADDR]	=	{ .type = NLA_NUL_STRING },
-	[SUPERMAN_ATTR_MSG_LEN] = 	{ .type = NLA_U32 },
-	[SUPERMAN_ATTR_MSG]	=	{ .type = NLA_UNSPEC },
-};
-
-
-// A SUPERMAN encrypt p2p message.
-typedef struct superman_encrypt_p2p_msg {
-	u_int32_t	addr;
-	u_int32_t	msg_len;
-	char*		msg;		// non-encrypted data
-} superman_encrypt_p2p_msg_t;
-static struct nla_policy superman_encrypt_p2p_genl_policy[4] = {
-	[SUPERMAN_ATTR_ADDR]	=	{ .type = NLA_NUL_STRING },
-	[SUPERMAN_ATTR_MSG_LEN] = 	{ .type = NLA_U32 },
-	[SUPERMAN_ATTR_MSG]	=	{ .type = NLA_UNSPEC },
-};
-
-
-// A SUPERMAN decrypt p2p message.
-typedef struct superman_decrypt_p2p_msg {
-	u_int32_t	addr;
-	u_int32_t	msg_len;
-	char*		msg;		// encrypted data
-} superman_decrypt_p2p_msg_t;
-static struct nla_policy superman_decrypt_p2p_genl_policy[4] = {
-	[SUPERMAN_ATTR_ADDR]	=	{ .type = NLA_NUL_STRING },
-	[SUPERMAN_ATTR_MSG_LEN] = 	{ .type = NLA_U32 },
-	[SUPERMAN_ATTR_MSG]	=	{ .type = NLA_UNSPEC },
-};
-
-// A SUPERMAN encrypt broadcast message.
-typedef struct superman_encrypt_broadcast_msg {
-	u_int32_t	addr;
-	u_int32_t	msg_len;
-	char*		msg;		// non-encrypted data
-} superman_encrypt_broadcast_msg_t;
-static struct nla_policy superman_encrypt_broadcast_genl_policy[4] = {
-	[SUPERMAN_ATTR_ADDR]	=	{ .type = NLA_NUL_STRING },
-	[SUPERMAN_ATTR_MSG_LEN] = 	{ .type = NLA_U32 },
-	[SUPERMAN_ATTR_MSG]	=	{ .type = NLA_UNSPEC },
-};
-
-
-// A SUPERMAN decrypt broadcast message.
-typedef struct superman_decrypt_broadcast_msg {
-	u_int32_t	addr;
-	u_int32_t	msg_len;
-	char*		msg;		// encrypted data
-} superman_decrypt_broadcast_msg_t;
-static struct nla_policy superman_decrypt_broadcast_genl_policy[4] = {
-	[SUPERMAN_ATTR_ADDR]	=	{ .type = NLA_NUL_STRING },
-	[SUPERMAN_ATTR_MSG_LEN] = 	{ .type = NLA_U32 },
-	[SUPERMAN_ATTR_MSG]	=	{ .type = NLA_UNSPEC },
-};
-*/
-
-#if __kernel__
-
-int superman_discovery_request(struct sk_buff *skb_msg, struct genl_info *info)
-{
-	SendDiscoveryRequest();
-	return 0;
-}
-
-#else
-
-int superman_certificate_exchange(struct nl_cache_ops *ops, struct genl_cmd *cmd, struct genl_info *info, void *arg)
-{
-	return 0;
-}
-
-int superman_authenticated_sk_request(struct nl_cache_ops *ops, struct genl_cmd *cmd, struct genl_info *info, void *arg)
-{
-	return 0;
-}
-
-int superman_authenticated_sk_response(struct nl_cache_ops *ops, struct genl_cmd *cmd, struct genl_info *info, void *arg)
-{
-	return 0;
-}
-
-int superman_sk_invalidate(struct nl_cache_ops *ops, struct genl_cmd *cmd, struct genl_info *info, void *arg)
-{
-	return 0;
-}
-
-int superman_broadcast_key_exchange(struct nl_cache_ops *ops, struct genl_cmd *cmd, struct genl_info *info, void *arg)
-{
-	return 0;
-}
-
-int superman_encrypt_p2p(struct nl_cache_ops *ops, struct genl_cmd *cmd, struct genl_info *info, void *arg)
-{
-	return 0;
-}
-
-int superman_decrypt_p2p(struct nl_cache_ops *ops, struct genl_cmd *cmd, struct genl_info *info, void *arg)
-{
-	return 0;
-}
-
-int superman_encrypt_broadcast(struct nl_cache_ops *ops, struct genl_cmd *cmd, struct genl_info *info, void *arg)
-{
-	return 0;
-}
-
-int superman_decrypt_broadcast(struct nl_cache_ops *ops, struct genl_cmd *cmd, struct genl_info *info, void *arg)
-{
-	return 0;
-}
-
-#endif
-
-#ifdef __kernel__
 static struct genl_family superman_genl_family = {
-	.id = 0, 	// GENL_ID_GENERATE = 0
-	.hdrsize = 0,
-	.name = K_SUPERMAN_FAMILYNAME,
-	.version = 1,
-	.maxattr = SUPERMAN_ATTR_MAX,
+	.id			= 0, 	// GENL_ID_GENERATE = 0
+	.hdrsize		= 0,
+	.name			= K_SUPERMAN_FAMILY_NAME,
+	.version		= 1,
+	.maxattr		= K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_MAX, //SUPERMAN_ATTR_MAX,
 };
 
-static struct genl_ops superman_ops[K_SUPERMAN_MAX] = {
-	{
-		.cmd = K_SUPERMAN_DISCOVERY_REQUEST,
-		.flags = 0,
-		.policy = 0, // superman_discovery_request_genl_policy,
-		.doit = superman_discovery_request,
-		.dumpit = NULL,
-	},
+enum {
+	K_SUPERMAN_MC_GROUP,
+#define K_SUPERMAN_MC_GROUP K_SUPERMAN_MC_GROUP
+
+	__K_SUPERMAN_MC_GROUP_MAX,
+#define K_SUPERMAN_MC_GROUP_MAX __K_SUPERMAN_MC_GROUP_MAX
 };
-#else
-static struct genl_cmd superman_cmds[] = {
+
+static struct genl_multicast_group superman_mc_groups[K_SUPERMAN_MC_GROUP_MAX] = {
 	{
-		.c_id       	= D_SUPERMAN_CERTIFICATE_EXCHANGE,
-		.c_name     	= D_SUPERMAN_CERTIFICATE_EXCHANGE_NAME,
-		.c_maxattr  	= SUPERMAN_ATTR_MAX,
-		.c_attr_policy  = 0,
-		.c_msg_parser   = superman_certificate_exchange,
-	}, {
-		.c_id 		= D_SUPERMAN_AUTHENTICATED_SK_REQUEST,
-		.c_name     	= D_SUPERMAN_AUTHENTICATED_SK_REQUEST_NAME,
-		.c_maxattr  	= SUPERMAN_ATTR_MAX,
-		.c_attr_policy  = 0, // superman_authenticated_sk_request_genl_policy,
-		.c_msg_parser   = superman_authenticated_sk_request,
-	}, {
-		.c_id 		= D_SUPERMAN_AUTHENTICATED_SK_RESPONSE,
-		.c_name     	= D_SUPERMAN_AUTHENTICATED_SK_RESPONSE_NAME,
-		.c_maxattr  	= SUPERMAN_ATTR_MAX,
-		.c_attr_policy  = 0, // superman_authenticated_sk_response_genl_policy,
-		.c_msg_parser   = superman_authenticated_sk_response,
-	}, {
-		.c_id 		= D_SUPERMAN_SK_INVALIDATE,
-		.c_name     	= D_SUPERMAN_SK_INVALIDATE_NAME,
-		.c_maxattr  	= SUPERMAN_ATTR_MAX,
-		.c_attr_policy  = 0, // superman_sk_invalidate_genl_policy,
-		.c_msg_parser   = superman_sk_invalidate,
-	}, {
-		.c_id 		= D_SUPERMAN_BROADCAST_KEY_EXCHANGE,
-		.c_name     	= D_SUPERMAN_BROADCAST_KEY_EXCHANGE_NAME,
-		.c_maxattr  	= SUPERMAN_ATTR_MAX,
-		.c_attr_policy  = 0, // superman_broadcast_key_exchange_genl_policy,
-		.c_msg_parser   = superman_broadcast_key_exchange,
-	}, {
-		.c_id 		= D_SUPERMAN_ENCRYPT_P2P,
-		.c_name     	= D_SUPERMAN_ENCRYPT_P2P_NAME,
-		.c_maxattr  	= SUPERMAN_ATTR_MAX,
-		.c_attr_policy  = 0, // superman_encrypt_p2p_genl_policy,
-		.c_msg_parser   = superman_encrypt_p2p,
-	}, {
-		.c_id 		= D_SUPERMAN_DECRYPT_P2P,
-		.c_name     	= D_SUPERMAN_DECRYPT_P2P_NAME,
-		.c_maxattr  	= SUPERMAN_ATTR_MAX,
-		.c_attr_policy  = 0, // superman_decrypt_p2p_genl_policy,
-		.c_msg_parser   = superman_decrypt_p2p,
-	}, {
-		.c_id 		= D_SUPERMAN_ENCRYPT_BROADCAST,
-		.c_name     	= D_SUPERMAN_ENCRYPT_BROADCAST_NAME,
-		.c_maxattr  	= SUPERMAN_ATTR_MAX,
-		.c_attr_policy  = 0, // superman_encrypt_broadcast_genl_policy,
-		.c_msg_parser   = superman_encrypt_broadcast,
-	}, {
-		.c_id 		= D_SUPERMAN_DECRYPT_BROADCAST,
-		.c_name     	= D_SUPERMAN_DECRYPT_BROADCAST_NAME,
-		.c_maxattr  	= SUPERMAN_ATTR_MAX,
-		.c_attr_policy  = 0, // superman_decrypt_broadcast_genl_policy,
-		.c_msg_parser   = superman_decrypt_broadcast,
+		.name		= K_SUPERMAN_MC_GROUP_NAME,
 	},
 };
 
-static struct genl_ops superman_ops = {
-	.o_name		= D_SUPERMAN_FAMILYNAME,
-	.o_hdrsize	= 0,
-	.o_cmds         = superman_cmds,
-	.o_ncmds        = D_SUPERMAN_MAX, // ARRAY_SIZE(superman_cmds),
-};
-#endif
-
-
-
-
-/*
-
-#ifdef __KERNEL__
-
-#define GENLMSG_DATA(glh) ((void *)(NLMSG_DATA(glh) + GENL_HDRLEN))
-#define GENLMSG_PAYLOAD(glh) (NLMSG_PAYLOAD(glh, 0) - GENL_HDRLEN)
-#define NLA_DATA(na) ((void *)((char*)(na) + NLA_HDRLEN))
-
-// Create a raw netlink socket and bind
-static int create_nl_socket(int protocol, int groups)
-{
-	socklen_t addr_len;
-	int fd;
-	struct sockaddr_nl local;
-	
-	fd = socket(AF_NETLINK, SOCK_RAW, protocol);
-	if (fd < 0) {
-		perror("socket");
-		return -1;
+#define GENL_PARSE(ATTR_MAX, POLICY) \
+	struct nlattr *attrs[ATTR_MAX + 1]; \
+	if(nlmsg_parse(info->nlhdr, superman_genl_family.hdrsize + GENL_HDRLEN, attrs, ATTR_MAX, POLICY) < 0) \
+	{ \
+		printk(KERN_INFO "Netlink: Failed to parse netlink message\n"); \
+		return 0; \
 	}
 
-	memset(&local, 0, sizeof(local));
-	local.nl_family = AF_NETLINK;
-	local.nl_groups = groups;
-	if (bind(fd, (struct sockaddr *) &local, sizeof(local)) < 0) {
-		close(fd);
-		return -1;
-	}
-	
-	return fd;
+int k_update_superman_security_table_entry(struct sk_buff *skb_msg, struct genl_info *info)
+{
+
+	uint32_t	address;
+	uint8_t		flag;
+	uint32_t	sk_len;
+	unsigned char*	sk;
+	uint32_t	ske_len;
+	unsigned char*	ske;
+	uint32_t	skp_len;
+	unsigned char*	skp;
+	GENL_PARSE(K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_MAX, k_update_superman_security_table_entry_genl_policy)
+	address = nla_get_u32(attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_ADDRESS]);
+	flag = nla_get_u8(attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_FLAG]);
+	sk_len = nla_len(attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SK]);
+	sk = kmalloc(sk_len, GFP_KERNEL);
+	nla_memcpy(sk, attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SK], sk_len);
+	ske_len = nla_len(attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKE]);
+	ske = kmalloc(ske_len, GFP_KERNEL);
+	nla_memcpy(ske, attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKE], ske_len);
+	skp_len = nla_len(attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP]);
+	skp = kmalloc(skp_len, GFP_KERNEL);
+	nla_memcpy(skp, attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP], skp_len);
+
+	// Update the security table
+
+	kfree(sk);
+	kfree(ske);
+	kfree(skp);
+
+	return 0;
 }
 
-// Send netlink message to kernel
-bool sendto_fd(int nl_sd, const char *buf, int bufLen)
+int k_update_superman_broadcast_key(struct sk_buff *skb_msg, struct genl_info *info)
 {
-        struct sockaddr_nl nladdr;
-        int r;
-        
-        memset(&nladdr, 0, sizeof(nladdr));
-        nladdr.nl_family = AF_NETLINK;
-        
-        while ((r = sendto(nl_sd, buf, bufLen, 0, (struct sockaddr *) &nladdr, sizeof(nladdr))) < bufLen) {
-                if (r > 0) {
-                        buf += r;
-                        bufLen -= r;
-                } else if (errno != EAGAIN)
-                        return false;
-        }
-        return true;
+	uint32_t broadcast_key_len;
+	unsigned char* broadcast_key;
+	GENL_PARSE(K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MAX, k_update_superman_broadcast_key_genl_policy)
+	broadcast_key_len = nla_len(attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY]);
+	broadcast_key = kmalloc(broadcast_key_len, GFP_KERNEL);
+	nla_memcpy(broadcast_key, attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY], broadcast_key_len);
+
+	// Do something with the broadcast key!
+
+	kfree(broadcast_key);
+
+	return 0;
 }
 
-// Probe the controller in genetlink to find the family id
-// for the family id
-int get_family_id(int nl_sd)
+int k_send_superman_discovery_request(struct sk_buff *skb_msg, struct genl_info *info)
 {
-	struct {
-		struct nlmsghdr n;
-		struct genlmsghdr g;
-		char buf[256];
-	} family_req;
-	
-	struct {
-		struct nlmsghdr n;
-		struct genlmsghdr g;
-		char buf[256];
-	} ans;
+	uint32_t sk_len;
+	unsigned char* sk;
+	GENL_PARSE(K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX, k_send_superman_discovery_request_genl_policy)
+	sk_len = nla_len(attrs[K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK]);
+	sk = kmalloc(sk_len, GFP_KERNEL);
+	nla_memcpy(sk, attrs[K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK], sk_len);
 
-	int id;
-	struct nlattr *na;
-	int rep_len;
+	SendDiscoveryRequest(sk_len, sk);
 
-	// Get family name
-	family_req.n.nlmsg_type = GENL_ID_CTRL;
-	family_req.n.nlmsg_flags = NLM_F_REQUEST;
-	family_req.n.nlmsg_seq = 0;
-	family_req.n.nlmsg_pid = getpid();
-	family_req.n.nlmsg_len = NLMSG_LENGTH(GENL_HDRLEN);
-	family_req.g.cmd = CTRL_CMD_GETFAMILY;
-	family_req.g.version = 0x1;
-	
-	na = (struct nlattr *) GENLMSG_DATA(&family_req);
-	na->nla_type = CTRL_ATTR_FAMILY_NAME;
+	kfree(sk);
 
-// If we're a kernel module, we're trying to connect to the daemon.
-#ifdef __KERNEL__
-	na->nla_len = strlen(D_SUPERMAN_FAMILYNAME) + 1 + NLA_HDRLEN;
-	strcpy((char*)NLA_DATA(na), D_SUPERMAN_FAMILYNAME);
-// If we're the daemon, we're trying to connect to the kernel module.
+	return 0;
+}
+
+int k_send_superman_certificate_request(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	uint32_t address;
+	uint32_t sk_len;
+	unsigned char* sk;
+	GENL_PARSE(K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX, k_send_superman_certificate_request_genl_policy)
+	address = nla_get_u32(attrs[K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS]);
+	sk_len = nla_len(attrs[K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK]);
+	sk = kmalloc(sk_len, GFP_KERNEL);
+	nla_memcpy(sk, attrs[K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK], sk_len);
+
+	// Do something with the request!
+
+	kfree(sk);
+
+	return 0;
+}
+
+int k_send_superman_certificate_exchange(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	uint32_t address;
+	uint32_t certificate_len;
+	unsigned char* certificate;
+	GENL_PARSE(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX, k_send_superman_certificate_exchange_genl_policy)
+	address = nla_get_u32(attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS]);
+	certificate_len = nla_len(attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE]);
+	certificate = kmalloc(certificate_len, GFP_KERNEL);
+	nla_memcpy(certificate, attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE], certificate_len);
+
+	// Do something with the exchange!
+
+	kfree(certificate);
+
+	return 0;
+}
+
+int k_send_superman_certificate_exchange_with_broadcast_key(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	uint32_t address;
+	uint32_t certificate_len;
+	unsigned char* certificate;
+	uint32_t broadcast_key_len;
+	unsigned char* broadcast_key;
+	GENL_PARSE(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX, k_send_superman_certificate_exchange_with_broadcast_key_genl_policy)
+	address = nla_get_u32(attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS]);
+	certificate_len = nla_len(attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE]);
+	certificate = kmalloc(certificate_len, GFP_KERNEL);
+	nla_memcpy(certificate, attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE], certificate_len);
+	broadcast_key_len = nla_len(attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY]);
+	broadcast_key = kmalloc(broadcast_key_len, GFP_KERNEL);
+	nla_memcpy(broadcast_key, attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY], broadcast_key_len);
+
+	// Do something with the exchange!
+
+	kfree(certificate);
+	kfree(broadcast_key);
+
+	return 0;
+}
+
+int k_send_superman_broadcast_key_exchange(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	uint32_t broadcast_key_len;
+	unsigned char* broadcast_key;
+	GENL_PARSE(K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX, k_send_superman_broadcast_key_exchange_genl_policy)
+	broadcast_key_len = nla_len(attrs[K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY]);
+	broadcast_key = kmalloc(broadcast_key_len, GFP_KERNEL);
+	nla_memcpy(broadcast_key, attrs[K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY], broadcast_key_len);
+
+	// Do something with the exchange!
+
+	kfree(broadcast_key);
+
+	return 0;
+}
+
+int k_send_superman_sk_invalidate(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	uint32_t address;
+	GENL_PARSE(K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_MAX, k_send_superman_sk_invalidate_genl_policy)
+	address = nla_get_u32(attrs[K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_ADDRESS]);
+
+	// Do something with the request!
+
+	return 0;
+}
+
+int d_received_superman_discovery_request(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	return 0;
+}
+
+int d_received_superman_certificate_request(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	return 0;
+}
+
+int d_received_superman_certificate_exchange(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	return 0;
+}
+
+int d_received_superman_certificate_exchange_with_broadcast_key(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	return 0;
+}
+
+int d_received_superman_authenticated_sk_response(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	return 0;
+}
+
+int d_received_superman_sk_invalidate(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	return 0;
+}
+
+int d_received_superman_broadcast_key_exchange(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	return 0;
+}
+
 #else
-	na->nla_len = strlen(K_SUPERMAN_FAMILYNAME) + 1 + NLA_HDRLEN;
-	strcpy((char*)NLA_DATA(na), K_SUPERMAN_FAMILYNAME);
-#endif
-	
-	family_req.n.nlmsg_len += NLMSG_ALIGN(na->nla_len);
 
-	if (sendto_fd(nl_sd, (char *) &family_req, family_req.n.nlmsg_len) < 0)
-		return false;
-    
-	rep_len = recv(nl_sd, &ans, sizeof(ans), 0);
-	if (rep_len < 0){
-		perror("recv");
-		return -1;
+#define GENL_PARSE(ATTR_MAX, POLICY) \
+	struct nlattr *attrs[ATTR_MAX + 1]; \
+	if(genlmsg_parse(nlh, 0, attrs, ATTR_MAX, POLICY) < 0) \
+	{ \
+		printf("Netlink: Failed to parse netlink message\n"); \
+		return NL_SKIP; \
 	}
 
-	// Validate response message
-	if (!NLMSG_OK((&ans.n), rep_len)){
-		fprintf(stderr, "invalid reply message\n");
-		return -1;
+int d_received_superman_discovery_request(struct nlmsghdr *nlh)
+{
+	GENL_PARSE(D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX, d_received_superman_discovery_request_genl_policy)
+
+	uint32_t address;
+	uint32_t sk_len;
+	unsigned char* sk;
+
+	address = nla_get_u32(attrs[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS]);
+	sk_len = nla_len(attrs[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK]);
+	sk = malloc(sk_len);
+	nla_memcpy(sk, attrs[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK], sk_len);
+
+	// Do something with the request!
+
+	free(sk);
+
+	return 0;
+}
+
+int d_received_superman_certificate_request(struct nlmsghdr *nlh)
+{
+	GENL_PARSE(D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX, d_received_superman_certificate_request_genl_policy)
+
+	uint32_t address;
+	uint32_t sk_len;
+	unsigned char* sk;
+
+	address = nla_get_u32(attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS]);
+	sk_len = nla_len(attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK]);
+	sk = malloc(sk_len);
+	nla_memcpy(sk, attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK], sk_len);
+
+	// Do something with the request!
+
+	free(sk);
+
+	return 0;
+}
+
+int d_received_superman_certificate_exchange(struct nlmsghdr *nlh)
+{
+	GENL_PARSE(D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_MAX, d_received_superman_certificate_exchange_genl_policy)
+
+	uint32_t address;
+	uint32_t certificate_len;
+	unsigned char* certificate;
+
+	address = nla_get_u32(attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS]);
+	certificate_len = nla_len(attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE]);
+	certificate = malloc(certificate_len);
+	nla_memcpy(certificate, attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE], certificate_len);
+
+	// Do something with the exchange!
+
+	free(certificate);
+
+	return 0;
+}
+
+int d_received_superman_certificate_exchange_with_broadcast_key(struct nlmsghdr *nlh)
+{
+	GENL_PARSE(D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX, d_received_superman_certificate_exchange_with_broadcast_key_genl_policy)
+
+	uint32_t address;
+	uint32_t certificate_len;
+	unsigned char* certificate;
+	uint32_t broadcast_key_len;
+	unsigned char* broadcast_key;
+
+	address = nla_get_u32(attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS]);
+	certificate_len = nla_len(attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE]);
+	certificate = malloc(certificate_len);
+	nla_memcpy(certificate, attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE], certificate_len);
+	broadcast_key_len = nla_len(attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY]);
+	broadcast_key = malloc(broadcast_key_len);
+	nla_memcpy(broadcast_key, attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY], broadcast_key_len);
+
+	// Do something with the exchange!
+
+	free(certificate);
+	free(broadcast_key);
+
+	return 0;
+}
+
+int d_received_superman_authenticated_sk_response(struct nlmsghdr *nlh)
+{
+	GENL_PARSE(D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_MAX, d_received_superman_authenticated_sk_response_genl_policy)
+
+	uint32_t address;
+	uint32_t sk_len;
+	unsigned char* sk;
+
+	address = nla_get_u32(attrs[D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_ADDRESS]);
+	sk_len = nla_len(attrs[D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_SK]);
+	sk = malloc(sk_len);
+	nla_memcpy(sk, attrs[D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_SK], sk_len);
+
+	// Do something with the sk!
+
+	free(sk);
+
+	return 0;
+}
+
+int d_received_superman_sk_invalidate(struct nlmsghdr *nlh)
+{
+	GENL_PARSE(D_RECEIVED_SUPERMAN_SK_INVALIDATE_ATTR_MAX, d_received_superman_sk_invalidate_genl_policy)
+
+	uint32_t address;
+
+	address = nla_get_u32(attrs[D_RECEIVED_SUPERMAN_SK_INVALIDATE_ATTR_ADDRESS]);
+
+	// Do something with the request!
+
+	return 0;
+}
+
+int d_received_superman_broadcast_key_exchange(struct nlmsghdr *nlh)
+{
+	GENL_PARSE(D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_MAX, d_received_superman_broadcast_key_exchange_genl_policy)
+
+	uint32_t broadcast_key_len;
+	unsigned char* broadcast_key;
+
+	broadcast_key_len = nla_len(attrs[D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY]);
+	broadcast_key = malloc(broadcast_key_len);
+	nla_memcpy(broadcast_key, attrs[D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY], broadcast_key_len);
+
+	// Do something with the exchange!
+
+	free(broadcast_key);
+
+	return 0;
+}
+
+int d_superman_messaging_callback(struct nl_msg* msg, void* arg)
+{
+	struct nlmsghdr *nlh = NULL;
+	struct genlmsghdr* genlh = NULL;
+
+	nlh = nlmsg_hdr(msg);
+	if(!nlh)
+	{
+		printf("Netlink: Failed to get the Netlink message header\n");
+		return NL_SKIP;
 	}
 
-	if (ans.n.nlmsg_type == NLMSG_ERROR) { // error
-		fprintf(stderr, "received error\n");
-		return -1;
+	genlh = genlmsg_hdr(nlh);
+	if(!genlh)
+	{
+		printf("Netlink: Failed to get the Generic Netlink message header\n");
+		return NL_SKIP;
 	}
 
-	na = (struct nlattr *) GENLMSG_DATA(&ans);
-	na = (struct nlattr *) ((char *) na + NLA_ALIGN(na->nla_len));
-	if (na->nla_type == CTRL_ATTR_FAMILY_ID) {
-		id = *(__u16 *) NLA_DATA(na);
-    	}
+	switch(genlh->cmd)
+	{
+		case D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST:
+			return d_received_superman_discovery_request(nlh);
+			break;
+		case D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST:
+			return d_received_superman_certificate_request(nlh);
+			break;
+		case D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE:
+			return d_received_superman_certificate_exchange(nlh);
+			break;
+		case D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY:
+			return d_received_superman_certificate_exchange_with_broadcast_key(nlh);
+			break;
+		case D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE:
+			return d_received_superman_authenticated_sk_response(nlh);
+			break;
+		case D_RECEIVED_SUPERMAN_SK_INVALIDATE:
+			return d_received_superman_sk_invalidate(nlh);
+			break;
+		case D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE:
+			return d_received_superman_broadcast_key_exchange(nlh);
+			break;
+	}
 
-	return id;
+	return NL_SKIP;
+}
+
+void CheckForMessages(void)
+{
+	if(nlsk)
+	{
+		int rc = 0;
+
+		// Receive messages
+		rc = nl_recvmsgs_default(nlsk);
+		if(rc < 0)
+		{
+			printf("Netlink: nl_recvmsgs_default failed, rc %d\n", rc);
+			DeInitNetlink();
+		}
+	}
 }
 
 #endif
 
-*/
+#ifdef __KERNEL__
+
+static struct genl_ops superman_ops[SUPERMAN_MAX] = {
+
+	// Daemon to Kernel functions
+
+	{
+		.cmd		= K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY,
+		.flags		= 0,
+		.policy		= k_update_superman_security_table_entry_genl_policy,
+		.doit		= k_update_superman_security_table_entry,
+		.dumpit		= NULL,
+	}, {
+		.cmd		= K_UPDATE_SUPERMAN_BROADCAST_KEY,
+		.flags		= 0,
+		.policy		= k_update_superman_broadcast_key_genl_policy,
+		.doit		= k_update_superman_broadcast_key,
+		.dumpit		= NULL,
+	}, {
+		.cmd		= K_SEND_SUPERMAN_DISCOVERY_REQUEST,
+		.flags		= 0,
+		.policy		= k_send_superman_discovery_request_genl_policy,
+		.doit		= k_send_superman_discovery_request,
+		.dumpit		= NULL,
+	}, {
+		.cmd		= K_SEND_SUPERMAN_CERTIFICATE_REQUEST,
+		.flags		= 0,
+		.policy		= k_send_superman_certificate_request_genl_policy,
+		.doit		= k_send_superman_certificate_request,
+		.dumpit		= NULL,
+	}, {
+		.cmd		= K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE,
+		.flags		= 0,
+		.policy		= k_send_superman_certificate_exchange_genl_policy,
+		.doit		= k_send_superman_certificate_exchange,
+		.dumpit		= NULL,
+	}, {
+		.cmd		= K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY,
+		.flags		= 0,
+		.policy		= k_send_superman_certificate_exchange_with_broadcast_key_genl_policy,
+		.doit		= k_send_superman_certificate_exchange_with_broadcast_key,
+		.dumpit		= NULL,
+	}, {
+		.cmd		= K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE,
+		.flags		= 0,
+		.policy		= k_send_superman_broadcast_key_exchange_genl_policy,
+		.doit		= k_send_superman_broadcast_key_exchange,
+		.dumpit		= NULL,
+	}, {
+		.cmd		= K_SEND_SUPERMAN_SK_INVALIDATE,
+		.flags		= 0,
+		.policy		= k_send_superman_sk_invalidate_genl_policy,
+		.doit		= k_send_superman_sk_invalidate,
+		.dumpit		= NULL,
+	},
+
+	// Kernel to Daemon functions
+	{
+		.cmd       	= D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST,
+		.flags		= 0,
+		.policy  	= d_received_superman_discovery_request_genl_policy,
+		.doit		= d_received_superman_discovery_request,
+		.dumpit 	= NULL,
+	}, {
+		.cmd 		= D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST,
+		.flags		= 0,
+		.policy  	= d_received_superman_certificate_request_genl_policy,
+		.doit		= d_received_superman_certificate_request,
+		.dumpit 	= NULL,
+	}, {
+		.cmd 		= D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE,
+		.flags		= 0,
+		.policy  	= d_received_superman_certificate_exchange_genl_policy,
+		.doit		= d_received_superman_certificate_exchange,
+		.dumpit 	= NULL,
+	}, {
+		.cmd 		= D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY,
+		.flags		= 0,
+		.policy  	= d_received_superman_certificate_exchange_with_broadcast_key_genl_policy,
+		.doit		= d_received_superman_certificate_exchange_with_broadcast_key,
+		.dumpit 	= NULL,
+	}, {
+		.cmd 		= D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE,
+		.flags		= 0,
+		.policy  	= d_received_superman_authenticated_sk_response_genl_policy,
+		.doit		= d_received_superman_authenticated_sk_response,
+		.dumpit 	= NULL,
+	}, {
+		.cmd 		= D_RECEIVED_SUPERMAN_SK_INVALIDATE,
+		.flags		= 0,
+		.policy  	= d_received_superman_sk_invalidate_genl_policy,
+		.doit		= d_received_superman_sk_invalidate,
+		.dumpit 	= NULL,
+	}, {
+		.cmd 		= D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE,
+		.flags		= 0,
+		.policy  	= d_received_superman_broadcast_key_exchange_genl_policy,
+		.doit		= d_received_superman_broadcast_key_exchange,
+		.dumpit 	= NULL,
+	},
+};
+
+#endif
+
+
 
 #ifndef __KERNEL__
 
-void InvokeSupermanDiscoveryRequest()
-{
-	struct nl_sock* sk;
-	struct nl_msg *msg;
-	int superman_family_id;
+#define D_GENL_START(K_SUPERMAN_OPERATION) \
+	struct nl_msg *msg; \
+	int superman_family_id; \
+	int fail = 0; \
+	\
+	/* Find the SUPERMAN family identifier. */ \
+	superman_family_id = genl_ctrl_resolve(nlsk, K_SUPERMAN_FAMILY_NAME); \
+	\
+	if(superman_family_id >= 0) \
+	{ \
+		/* Construct a new message */ \
+		msg = nlmsg_alloc(); \
+		\
+		/* Add the Generic Netlink header to the netlink message. */ \
+		genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, superman_family_id, 0, 0, K_SUPERMAN_OPERATION, 0); \
 
-	// Create a netlink socket and connect to Generic Netlink
-	sk = nl_socket_alloc();
-	genl_connect(sk);
-
-	// Find the SUPERMAN family identifier.
-	superman_family_id = genl_ctrl_resolve(sk, "SUPERMAN");
-
-	if(superman_family_id >= 0)
-	{
-		// Construct a new message
-		msg = nlmsg_alloc();
-
-		// Add the Generic Netlink header to the netlink message.
-		genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, superman_family_id, 0, 0, K_SUPERMAN_DISCOVERY_REQUEST, 0);
-
-		// We have no data to add.
-
-		// Send the message over the netlink socket
-		nl_send_auto(sk, msg);
-
-		// Cleanup
-		nlmsg_free(msg);
+#define D_GENL_FINISH \
+		if(fail == 0) { \
+			/* Send the message over the netlink socket */ \
+			nl_send_auto(nlsk, msg); \
+		} \
+		\
+		/* Cleanup */ \
+		nlmsg_free(msg); \
+	} \
+	else {\
+		printf("Netlink: No SUPERMAN netlink family found. Is the SUPERMAN kernel module loaded?\n"); \
 	}
-	else
-		printf("No SUPERMAN netlink family found. Is the SUPERMAN kernel module loaded?\n");
 
-	// Cleanup
-	nl_socket_free(sk);
+void UpdateSupermanSecurityTableEntry(uint32_t address, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp)
+{
+	D_GENL_START(K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY)
+	if(	nla_put_u32	(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_ADDRESS,							address		) ||
+		nla_put_u8	(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_FLAG,							flag		) ||
+		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SK,					sk_len,			sk		) ||
+		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKE,				ske_len,		skp		) ||
+		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP,				ske_len,		skp		))
+		fail = 1;
+	D_GENL_FINISH
+}
+
+void UpdateSupermanBroadcastKey(uint32_t broadcast_key_len, unsigned char* broadcast_key)
+{
+	D_GENL_START(K_UPDATE_SUPERMAN_BROADCAST_KEY)
+	if(	nla_put		(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY,				broadcast_key_len,	broadcast_key	))
+		fail = 1;
+	D_GENL_FINISH
+}
+
+void SendSupermanDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
+{
+	D_GENL_START(K_SEND_SUPERMAN_DISCOVERY_REQUEST)
+	if(	nla_put		(msg,	K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,					sk_len,			sk		))
+		fail = 1;
+	D_GENL_FINISH
+}
+
+void SendSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned char* sk)
+{
+	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_REQUEST)
+	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,							address		) ||
+		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,					sk_len,			sk		))
+		fail = 1;
+	D_GENL_FINISH
+}
+
+void SendSupermanCertificateExchange(uint32_t address, uint32_t certificate_len, unsigned char* certificate)
+{
+	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE)
+	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS,							address		) ||
+		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE,				certificate_len,	certificate	))
+		fail = 1;
+	D_GENL_FINISH
+}
+
+void SendSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key)
+{
+	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY)
+	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS,					address		) ||
+		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,	certificate_len,	certificate	) ||
+		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,	broadcast_key_len,	broadcast_key	))
+		fail = 1;
+	D_GENL_FINISH
+}
+
+void SendSupermanBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key)
+{
+	D_GENL_START(K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE)
+	if(	nla_put		(msg,	K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY,			broadcast_key_len, 	broadcast_key	))
+		fail = 1;
+	D_GENL_FINISH
+}
+
+void SendSupermanSKInvalidate(uint32_t address)
+{
+	D_GENL_START(K_SEND_SUPERMAN_SK_INVALIDATE)
+	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_ADDRESS,								address		))
+		fail = 1;
+	D_GENL_FINISH
 }
 
 #else
 
+#define K_GENL_START(D_SUPERMAN_OPERATION) \
+	struct sk_buff* skb; \
+	void* msg; \
+	int fail = 0; \
+	\
+	skb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL); \
+	if(!skb) { \
+		printk(KERN_INFO "SUPERMAN: Netlink message construction failure.\n"); \
+		return; \
+	} \
+	\
+	msg = genlmsg_put( skb, \
+	                   0,           		/* PID is whatever */ \
+	                   0,           		/* Sequence number (don't care) */ \
+	                   &superman_genl_family,   	/* Pointer to family struct */ \
+	                   0,                     	/* Flags */ \
+	                   D_SUPERMAN_OPERATION 	/* Generic netlink command */ \
+	                   ); \
+	if(!msg) { \
+		printk(KERN_INFO "SUPERMAN: Generic Netlink message construction failure.\n"); \
+		return; \
+	} \
 
-// If data != NULL the caller is responsible for cleaning up memory!
-bool InvokeCertificateRequest(void** data, int* data_size)
+#define K_GENL_FINISH \
+	\
+	if(fail == 1) { \
+		genlmsg_cancel(skb, msg); \
+	} else { \
+		/* Finalise the message */ \
+		genlmsg_end(skb, msg); \
+		\
+		fail = genlmsg_multicast_allns(&superman_genl_family, skb, 0, 0, GFP_KERNEL); \
+		\
+		/*	If error - fail.
+			ESRCH is "forever alone" case - no one is listening for our messages 
+			and it's ok, since userspace daemon can be unloaded.
+		*/ \
+		if(fail && fail != -ESRCH) \
+		{ \
+			printk(KERN_INFO "Failed to send message. fail = %d\n", fail); \
+			genlmsg_cancel(skb, msg); \
+		} \
+	} \
+	/* Need this to free notification allocated in irq handler */ \
+	kfree(skb); \
+	
+void ReceivedSupermanDiscoveryRequest(uint32_t address, uint32_t sk_len, unsigned char* sk)
 {
-	int nl_sd;
-	int family_id;
+	K_GENL_START(D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST)
+	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS,							address		) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,					sk_len,			sk		))
+		fail = 1;
+	K_GENL_FINISH
+}
 
-	*data = NULL;
-	*data_size = 0;
+void ReceivedSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned char* sk)
+{
+	K_GENL_START(D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST)
+	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,							address		) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,				sk_len,			sk		))
+		fail = 1;
+	K_GENL_FINISH
+}
 
-	nl_sd = create_nl_socket(NETLINK_GENERIC, 0);
-	if(nl_sd < 0) {
-		printf("SUPERMAN: create_nl_socket failure.\n");
-		return;
-	}
-	family_id = get_family_id(nl_sd);
-	if(family_id < 0) {
-		printf("SUPERMAN: netlink family lookup failed. Is the SUPERMAN kernel module loaded?\n");
-		goto cleanup;
-	}
+void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t certificate_len, unsigned char* certificate)
+{
+	K_GENL_START(D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE)
+	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS,							address		) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE,			certificate_len,	certificate	))
+		fail = 1;
+	K_GENL_FINISH
+}
 
+void ReceivedSupermanCertificateExchangeWithBroadcasstKey(uint32_t address, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key)
+{
+	K_GENL_START(D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY)
+	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS,				address		) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,	certificate_len,	certificate	) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY,	broadcast_key_len,	broadcast_key	))
+		fail = 1;
+	K_GENL_FINISH
+}
 
+void ReceivedSupermanAuthenticatedSKResponse(uint32_t address, uint32_t sk_len, unsigned char* sk)
+{
+	K_GENL_START(D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE)
+	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_ADDRESS,						address		) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_SK,				sk_len,			sk		))
+		fail = 1;
+	K_GENL_FINISH
+}
 
-	struct {
-                struct nlmsghdr n;
-                struct genlmsghdr g;
-                char buf[256];
-        } ans;
+void ReceivedSupermanSKInvalidate(uint32_t address)
+{
+	K_GENL_START(D_RECEIVED_SUPERMAN_SK_INVALIDATE)
+	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_SK_INVALIDATE_ATTR_ADDRESS,								address		))
+		fail = 1;
+	K_GENL_FINISH
+}
 
-        struct {
-                struct nlmsghdr n;
-                struct genlmsghdr g;
-                char buf[256];
-        } req;
-        struct nlattr *na;
-
-	// Send command needed
-        req.n.nlmsg_len = NLMSG_LENGTH(GENL_HDRLEN);
-        req.n.nlmsg_type = family_id;
-        req.n.nlmsg_flags = NLM_F_REQUEST;
-        req.n.nlmsg_seq = 0;
-        req.n.nlmsg_pid = getpid();
-        req.g.cmd = K_SUPERMAN_CERTIFICATE_REQUEST;
-
-	// Compose message
-	// na = (struct nlattr *) GENLMSG_DATA(&req);
-        // na->nla_type = 1; // DOC_EXMPL_A_MSG
-        // char * message = "hello world!"; //message
-        // int mlength = 14;
-        // na->nla_len = mlength+NLA_HDRLEN; //message length
-        // memcpy(NLA_DATA(na), message, mlength);
-        // req.n.nlmsg_len += NLMSG_ALIGN(na->nla_len);
-
-	// Send message
-	struct sockaddr_nl nladdr;
-        int r;
-        
-        memset(&nladdr, 0, sizeof(nladdr));
-        nladdr.nl_family = AF_NETLINK;
-    
-	r = sendto(nl_sd, (char *)&req, req.n.nlmsg_len, 0, (struct sockaddr *) &nladdr, sizeof(nladdr));
-	
-	rep_len = recv(nl_sd, &ans, sizeof(ans), 0);
-        // Validate response message
-        if (ans.n.nlmsg_type == NLMSG_ERROR) { // error
-                printf("SUPERMAN: Error received NACK - leaving\n");
-		goto cleanup;
-        }
-        if (rep_len < 0) {
-               	printf("SUPERMAN: Error receiving reply message via Netlink\n");
-		goto cleanup;
-        }
-        if (!NLMSG_OK((&ans.n), rep_len)) {
-               	printf("SUPERMAN: Invalid reply message received via Netlink\n");
-		goto cleanup;
-	}
-
-	
-        *data_size = GENLMSG_PAYLOAD(&ans.n);
-        na = (struct nlattr *) GENLMSG_DATA(&ans);
-	*data = kmalloc(rep_len, GFP_ATOMIC);
-	memcpy(*data, NLA_DATA(na), *data_size);
-
-cleanup:
-        close(nl_sd);
-	return *data != NULL;
+void ReceivedSupermanBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key)
+{
+	K_GENL_START(D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE)
+	if(	nla_put		(skb,	D_RECEIVED_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY,			broadcast_key_len,	broadcast_key	))
+		fail = 1;
+	K_GENL_FINISH
 }
 
 #endif
 
-void InitNetlink(void)
+bool InitNetlink(void)
 {
 #ifdef __KERNEL__
-	genl_register_family_with_ops(&superman_genl_family, superman_ops);
+	genl_register_family_with_ops_groups(&superman_genl_family, superman_ops, superman_mc_groups);
 #else
-	genl_register_family(&superman_ops);	
+	int rc = 0;
+
+	// Allocate a new socket
+	nlsk = nl_socket_alloc();
+	if(!nlsk) {
+		printf("Netlink: nl_socket_alloc failed\n" );
+		return false;
+	}
+
+	// Disable sequence number checking
+	nl_socket_disable_seq_check(nlsk);
+
+	// Entry callback for valid incoming messages
+	rc = nl_socket_modify_cb(nlsk, NL_CB_VALID, NL_CB_CUSTOM, d_superman_messaging_callback, NULL);
+	if(rc < 0)
+	{
+		printf("Netlink: nl_cb_set failed, rc %d\n", rc);
+		DeInitNetlink();
+		return false;
+	}
+
+	// Connect to Generic Netlink bus
+	rc = genl_connect(nlsk);
+	if(rc < 0)
+	{
+		printf("Netlink: genl_connect failed, rc %d\n", rc);
+		DeInitNetlink();
+		return false;
+	}
+
+	// Allocate libnl generic netlink cache
+	rc = genl_ctrl_alloc_cache(nlsk, &genl_cache);
+	if(rc < 0)
+	{
+		printf("Netlink: genl_ctrl_alloc_cache failed, rc %d\n", rc);
+		DeInitNetlink();
+		return false;
+	}
+	
+	// Resolve keymon muilticast group 
+	superman_mc_group_id = genl_ctrl_resolve_grp(nlsk, K_SUPERMAN_FAMILY_NAME, K_SUPERMAN_MC_GROUP_NAME);
+	if(superman_mc_group_id < 0)
+	{
+		printf("Netlink: genl_ctrl_resolve_grp failed, rc %d\n", superman_mc_group_id);
+		DeInitNetlink();
+		return false;
+	}
+
+	// Join keymon multicast group
+	rc = nl_socket_add_memberships(nlsk, superman_mc_group_id, 0);
+	if ( rc < 0 )
+	{
+		printf("Netlink: nl_socket_add_membership failed, rc %d\n", rc);
+		superman_mc_group_id = -1;
+		DeInitNetlink();
+		return false;
+	}
+
 #endif
+	return true;
 }
 
 void DeInitNetlink(void)
@@ -650,7 +1207,19 @@ void DeInitNetlink(void)
 #ifdef __KERNEL__
 	genl_unregister_family(&superman_genl_family);
 #else
-	genl_unregister_family(&superman_ops);	
+	superman_mc_group_id = -1;
+
+	if(genl_cache)
+	{
+		nl_cache_free(genl_cache);
+		genl_cache = NULL;
+	}
+
+	if(nlsk)
+	{
+		nl_socket_free(nlsk);
+		nlsk = NULL;
+	}
 #endif
 }
 

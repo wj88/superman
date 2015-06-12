@@ -8,4 +8,7 @@ void InitDaemon()
         
 }
 
-void DeInitDaemon();
+void DeInitDaemon()
+{
+
+}
