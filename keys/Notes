@@ -1,0 +1,119 @@
+#
+# OpenSSL
+#
+# We using 1.0.2a (or later) of OpenSSL. This version supports -force_pubkey for using the DH public key within
+# the certificate, required for verifying the DH public key.
+#
+
+# Check current OpenSSL version
+openssl version
+
+# If older than 1.0.2, grab the latest, build it and install it.
+wget https://www.openssl.org/source/openssl-1.0.2a.tar.gz
+tar -xvzf openssl-1.0.2a.tar.gz
+cd openssl-1.0.2a
+./config --prefix=/usr/
+make
+sudo make install
+
+
+# ----------------------------------------------------------------------------------------------------------
+
+#
+# Create a CA certificate:
+#
+# This is done on the CA only.
+#
+
+# Create a CA private root key
+openssl genrsa -out CA_privatekey.pem 2048
+
+# Create a CA certificate
+openssl req -x509 -new -nodes -key CA_privatekey.pem -days 1024 -out CA_certificate.pem
+
+# Generate DH parameters (1024 bits long safe prime, generator 2):
+openssl dhparam -out dh_params.pem 1024
+
+#
+# Now copy the following to the nodes to use for DH key generation:
+#	dh_params.pem
+#
+
+# ----------------------------------------------------------------------------------------------------------
+
+#
+# Create the node keys and certificate request:
+#
+# This is done on the node.
+#
+
+
+# Generate private key from the parameters (public key is derivable):
+openssl genpkey -paramfile dh_params.pem -out node_dh_privatekey.pem
+
+# Derive public key from the private key:
+openssl pkey -in node_dh_privatekey.pem -pubout -out node_dh_publickey.pem
+
+# Generate a RSA private key (public key is derivable):
+openssl genrsa -out node_rsa_privatekey.pem 1024
+
+# Create a certificate request from the RSA key:
+openssl req -new -key node_rsa_privatekey.pem -out node_rsa_certreq.csr
+
+#
+# Now copy the following to the CA to generate a certificate:
+# 	node_rsa_certreq.csr
+# 	node_dh_publickey.pem
+#
+
+
+# ----------------------------------------------------------------------------------------------------------
+
+#
+# Creating the certificate:
+#
+# This is done on the CA only.
+#
+
+
+# With the certificate request and the DH public key, generate a DH certificate.
+openssl x509 -req -in node_rsa_certreq.csr -CAkey CA_privatekey.pem -CA CA_certificate.pem -force_pubkey node_dh_publickey.pem -out node_certificate.pem -CAcreateserial
+
+#
+# Now copy the following back to the node:
+#	CA_certificate.pem
+#	node_certificate.pem
+#
+
+
+# ----------------------------------------------------------------------------------------------------------
+
+
+#
+# Other useful commands
+#
+
+# To view the DH params:
+openssl dhparam -in dh_params.pem -text
+
+# To view the certificate:
+openssl x509 -in node_certificate.pem -text
+
+# To convert a certificate from PEM (ASCII encoded) to DER (binary):
+openssl x509 -in node_certificate.pem -outform der -out node_certificate.der
+
+# To verify a certificate is valid:
+openssl verify -CAfile CA_certificate.pem node_certificate.pem
+
+# To extract the public key from a certificate
+openssl x509 -pubkey -noout -in node_certificate.pem -out node_publickey.pem
+
+
+#
+# Useful superman daemon commands
+#
+
+# To see the shared keys generated via DH
+./superman -c ../keys/CA_certificate.pem -n ../keys/node_certificate.pem -p ../keys/node_dh_privatekey.pem -t ../keys/test_certificate.pem
+./superman -c ../keys/CA_certificate.pem -n ../keys/test_certificate.pem -p ../keys/test_dh_privatekey.pem -t ../keys/node_certificate.pem
+
