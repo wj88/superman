@@ -1,6 +1,8 @@
 #ifndef __SUPERMAN_NETFILTER__
 #define __SUPERMAN_NETFILTER__
 
+#ifdef __KERNEL__
+
 #include <linux/skbuff.h>
 
 #include "superman.h"
@@ -26,5 +28,7 @@ struct superman_header* get_superman_header(struct sk_buff *skb);
 
 void InitNetFilter(void);
 void DeInitNetFilter(void);
+
+#endif
 
 #endif

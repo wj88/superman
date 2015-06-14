@@ -1,3 +1,5 @@
+#ifdef __KERNEL__
+
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
@@ -109,3 +111,4 @@ void DeInitProc(void)
 	remove_proc_entry("superman", NULL);
 }
 
+#endif

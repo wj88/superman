@@ -1,3 +1,5 @@
+#ifdef __KERNEL__
+
 #include <linux/netdevice.h>
 #include <linux/inetdevice.h>
 #include <linux/skbuff.h>
@@ -17,7 +19,7 @@ static inline u_int8_t _decode_ip_protocol(u_int8_t superman_protocol)
 	return superman_protocol - SUPERMAN_MAX_TYPE;
 }
 
-void SendDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
+void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 {
 	struct net_device *dev;
 	printk(KERN_INFO "SUPERMAN: Packet - Discovery Request...\n");
@@ -93,4 +95,4 @@ void SendDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
 	printk(KERN_INFO "SUPERMAN: Packet - ... Discovery Request done.\n");
 }
 
-
+#endif

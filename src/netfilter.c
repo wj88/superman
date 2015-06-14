@@ -1,3 +1,5 @@
+#ifdef __KERNEL__
+
 #include <linux/netfilter.h>
 #include <uapi/linux/netfilter.h>
 #include <uapi/linux/netfilter_ipv4.h>
@@ -271,3 +273,4 @@ void DeInitNetFilter(void)
 	nf_unregister_hook(&nf_hook_postrouting);
 }
 
+#endif

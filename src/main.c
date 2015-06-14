@@ -1,3 +1,5 @@
+#ifndef __KERNEL__
+
 // Requires libnl
 // sudo apt-get install libnl-3-dev libnl-genl-3-dev openssl
 
@@ -182,15 +184,16 @@ void Daemonise()
 
 void InvokeSendDiscoveryRequest()
 {
-	int publickey_len = GetPublickeyLen();
-	printf("Main: Grabbing the public key of %i bytes...\n", publickey_len);
-	unsigned char* publickey = malloc(publickey_len);
-	GetPublickey(publickey);
 
-	printf("Main: Calling SendSupermanDiscoveryRequest...\n");
-	SendSupermanDiscoveryRequest(publickey_len, publickey);
+	uint32_t sk_len;
+	unsigned char* sk;
+	if(MallocAndCopyPublickey(&sk_len, &sk))
+	{
+		printf("Main: Calling SendSupermanDiscoveryRequest...\n");
+		SendSupermanDiscoveryRequest(sk_len, sk);
 
-	free(publickey);
+		free(sk);
+	}
 }
 
 void Run()
@@ -253,3 +256,4 @@ int main(int argc, char **argv)
 	exit(EXIT_SUCCESS);
 }
 
+#endif

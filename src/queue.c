@@ -1,3 +1,5 @@
+#ifdef __KERNEL__
+
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/skbuff.h>
@@ -15,9 +17,6 @@
 
 #include "queue.h"
 #include "security_table.h"
-//#include "expl.h"
-//#include "netlink.h"
-//#include "ipenc.h"
 #include "superman.h"
 #include "packet.h"
 
@@ -254,3 +253,4 @@ void DeInitQueue(void)
 	FlushQueue();
 }
 
+#endif

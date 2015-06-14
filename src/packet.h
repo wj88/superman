@@ -1,6 +1,8 @@
 #ifndef _SUPERMAN_PACKET_H
 #define _SUPERMAN_PACKET_H
 
+#ifdef __KERNEL__
+
 #include <linux/ip.h>
 #include <linux/skbuff.h>
 #include <asm/byteorder.h>
@@ -47,7 +49,7 @@ struct superman_footer {
 
 };
 
-void SendDiscoveryRequest(uint32_t sk_len, unsigned char* sk);
+void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk);
 /*
 void SendCertificateRequest(struct sk_buff* rx_sk);
 void SendCertificateResponse(struct sk_buff* rx_sk);
@@ -68,3 +70,4 @@ bool ReceiveE2EPacket(struct sk_buff* rx_sk);
 
 #endif
 
+#endif

@@ -1,3 +1,5 @@
+#ifndef __KERNEL__
+
 // To create the authority and requesting certificates:
 // https://help.ubuntu.com/lts/serverguide/certificates-and-security.html
 
@@ -14,39 +16,81 @@
 
 #define SYM_KEY_LEN 32
 
-unsigned char*	ca_cert_data		= NULL;
-unsigned char*	node_cert_data		= NULL;
-unsigned char*	node_dh_privatekey_data	= NULL;
+uint32_t	ca_cert_data_len		= 0;
+unsigned char*	ca_cert_data			= NULL;
+uint32_t	node_cert_data_len		= 0;
+unsigned char*	node_cert_data			= NULL;
+uint32_t	node_dh_privatekey_data_len	= 0;
+unsigned char*	node_dh_privatekey_data		= NULL;
 
-BIO*		outbio			= NULL;
-BIO*		ca_certbio		= NULL;
-X509*		ca_cert			= NULL;
-X509_STORE*	ca_store		= NULL;
+BIO*		outbio				= NULL;
+BIO*		ca_certbio			= NULL;
+X509*		ca_cert				= NULL;
+X509_STORE*	ca_store			= NULL;
 
-BIO*		node_privatekeybio	= NULL;
-EVP_PKEY*	node_privatekey		= NULL;
-DH*		node_privatekey_dh	= NULL;
-BIGNUM*		node_publickey		= NULL;
+BIO*		node_privatekeybio		= NULL;
+EVP_PKEY*	node_privatekey			= NULL;
+DH*		node_privatekey_dh		= NULL;
+BIGNUM*		node_publickey			= NULL;
 
-int GetPublickeyLen()
+bool MallocAndCopyPublickey(uint32_t* sk_len, unsigned char** sk)
 {
-	if(node_publickey != NULL)
-		return BN_num_bytes(node_publickey);
-	else
-		return 0;
+	*sk_len = 0;
+	*sk = NULL;
+
+	if(
+		(node_publickey) &&
+		((*sk_len = BN_num_bytes(node_publickey)) > 0) &&
+		(*sk = malloc(*sk_len))
+	)
+	{
+		BN_bn2bin(node_publickey, *sk);
+		return true;
+	}
+
+	*sk_len = 0;
+	return false;
 }
 
-void GetPublickey(unsigned char* dest)
+bool MallocAndCopyCertificate(uint32_t* certificate_len, unsigned char** certificate)
 {
-	if(node_publickey != NULL && dest != NULL)
-		BN_bn2bin(node_publickey, dest); 
+	*certificate_len = 0;
+	*certificate = NULL;
+
+	if(
+		(node_cert_data) &&
+		(node_cert_data_len > 0) &&
+		(*certificate = (unsigned char*) malloc(node_cert_data_len))
+	)
+	{
+		*certificate_len = node_cert_data_len;
+		memcpy(*certificate, node_cert_data, node_cert_data_len);
+		return true;
+	}
+
+	return false;
 }
 
-unsigned char* LoadFile(unsigned char* filename)
+bool MallocAndCopyNewKey(uint32_t* key_len, unsigned char** key)
+{
+	*key_len = 0;
+	*key = NULL;
+	if(*key = malloc(SYM_KEY_LEN))
+	{
+		if(RAND_bytes(*key, SYM_KEY_LEN) == 1)
+		{
+			*key_len = SYM_KEY_LEN;
+			return true;
+		}
+		free(*key);
+	}
+	return false;
+}
+
+bool LoadFile(unsigned char* filename, uint32_t* data_len, unsigned char** data)
 {
 	int fd;
 	struct stat file_info;
-	unsigned char* data = NULL;
 
 	if (access(filename, F_OK) != 0)
 	{
@@ -64,8 +108,9 @@ unsigned char* LoadFile(unsigned char* filename)
 
 	fd = open(filename, O_RDONLY);
 	fstat(fd, &file_info);
-	data = (unsigned char*)malloc(file_info.st_size);
-	read(fd, data, file_info.st_size);
+	*data_len = file_info.st_size;
+	*data = (unsigned char*) malloc(*data_len);
+	read(fd, data, data_len);
 	close(fd);
 
 	return data;
@@ -238,16 +283,73 @@ bool VerifyCertificate(unsigned char* cert_data, unsigned char* node_share, int 
 
 	if(ret == 1)
 	{
-
-
-		printf("Security: ... certificate verified.\n");
+		printf("Security: ...certificate verified.\n");
 		return true;
 	}
 	else
 	{
-		printf("Security: ... certificate failed to verify.\n");
+		printf("Security: ...certificate failed to verify.\n");
 		return false;
 	}
+}
+
+bool MallocAndCopySharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* ske_len, unsigned char** ske, uint32_t* skp_len, unsigned char** skp)
+{
+	uint32_t cmb_len = DH_size(node_privatekey_dh);
+	unsigned char* cmb = NULL;
+	*ske_len = SYM_KEY_LEN;
+	*ske = NULL;
+	*skp_len = SYM_KEY_LEN;
+	*skp = NULL;
+	BIGNUM* sk_bn = NULL;
+
+	if(
+		(!(sk_bn = BN_mpi2bn(sk, sk_len, NULL))) ||
+		(!(cmb = (unsigned char*) malloc(cmb_len))) ||
+		(0 > (cmb_len = DH_compute_key(cmb, sk_bn, node_privatekey_dh))) ||
+		(!(*ske = (unsigned char*) malloc(*ske_len))) ||
+		(!(*skp = (unsigned char*) malloc(*skp_len)))
+	)
+	{
+		if(sk_bn) {
+			BN_free(sk_bn);
+			sk_bn = NULL;
+		}
+		cmb_len = 0;
+		if(cmb) {
+			free(cmb);
+			cmb = NULL;
+		}
+		*ske_len = 0;
+		if(*ske) {
+			free(*ske);
+			*ske = NULL;
+		}
+		*skp_len = 0;
+		if(*skp) {
+			free(*skp);
+			*skp = NULL;
+		}
+		return false;
+	}
+
+	BN_free(sk_bn);
+	
+	//printf("Security: Shared secret generated:\n");
+	//BIO_dump(outbio, cmb, cmb_len);
+
+	// https://www.openssl.org/docs/crypto/PKCS5_PBKDF2_HMAC.html
+
+	PKCS5_PBKDF2_HMAC_SHA1(cmb, cmb_len, NULL, 0, 1000, *ske_len, *ske);
+	printf("Security: SKE generated:\n");
+	BIO_dump(outbio, *ske, *ske_len);
+
+	PKCS5_PBKDF2_HMAC_SHA1(cmb, cmb_len, NULL, 0, 2000, *skp_len, *skp);
+	printf("Security: SKP generated:\n");
+	BIO_dump(outbio, *skp, *skp_len);
+
+	free(cmb);
+	return true;
 }
 
 unsigned char* GenerateSharedSecret(unsigned char* cert_data)
@@ -297,28 +399,29 @@ unsigned char* GenerateSharedSecret(unsigned char* cert_data)
 
 bool TestCertificate(unsigned char* cert_filename)
 {
-	unsigned char* cert_data = LoadFile(cert_filename);
-
-	// Can we verify the certificate?
-	if(VerifyCertificate(cert_data, NULL, 0))
+	uint32_t cert_data_len;
+	unsigned char* cert_data;
+	if(LoadFile(cert_filename, &cert_data_len, &cert_data))
 	{
+		// Can we verify the certificate?
+		if(VerifyCertificate(cert_data, NULL, 0))
+		{
+			unsigned char* sharedSecret = GenerateSharedSecret(cert_data);
 
-		unsigned char* sharedSecret = GenerateSharedSecret(cert_data);
+			OPENSSL_free(sharedSecret);
+		}
 
-		OPENSSL_free(sharedSecret);
-
+		free(cert_data);
 	}
-
-	free(cert_data);
 }
 
 bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_filename, unsigned char* node_dh_privatekey_filename)
 {
 	printf("Security: Reading certificate data...\n");
 	if(
-		(!(ca_cert_data = LoadFile(ca_cert_filename))) ||
-		(!(node_cert_data = LoadFile(node_cert_filename))) ||
-		(!(node_dh_privatekey_data = LoadFile(node_dh_privatekey_filename)))
+		(!(LoadFile(ca_cert_filename, &ca_cert_data_len, &ca_cert_data))) ||
+		(!(LoadFile(node_cert_filename, &node_cert_data_len, &node_cert_data))) ||
+		(!(LoadFile(node_dh_privatekey_filename, &node_dh_privatekey_data_len, &node_dh_privatekey_data)))
 	)
 	{
 		DeInitSecurity();
@@ -331,6 +434,7 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 	ERR_load_BIO_strings();
 	ERR_load_crypto_strings();
 	outbio  = BIO_new_fp(stdout, BIO_NOCLOSE);
+	RAND_poll();
 
 	printf("Security: Loading the CA public certificate...\n");
 
@@ -466,3 +570,4 @@ void DeInitSecurity()
 	}
 }
 
+#endif

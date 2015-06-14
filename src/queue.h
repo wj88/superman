@@ -1,6 +1,8 @@
 #ifndef _SUPERMAN_QUEUE_H
 #define _SUPERMAN_QUEUE_H
 
+#ifdef __KERNEL__
+
 #include <linux/skbuff.h>
 
 #define SUPERMAN_QUEUE_DROP 1
@@ -17,3 +19,4 @@ void GetQueueInfo(int* length, int* maxLength);
 
 #endif
 
+#endif

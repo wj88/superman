@@ -17,6 +17,6 @@ $(info $(KERNELDIR))
 $(info Building Superman with KERNELRELEASE = ${KERNELRELEASE})
 
 obj-m := superman.o
-superman-y := netfilter.o packet.o queue.o security_table.o proc.o netlink.o init.o
+superman-y := ../src/netfilter.o ../src/packet.o ../src/queue.o ../src/security_table.o ../src/proc.o ../src/netlink.o ../src/processor.o ../src/init.o
 
 endif
