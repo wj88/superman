@@ -16,6 +16,7 @@
 #include <net/icmp.h>
 
 #include "queue.h"
+#include "packet_info.h"
 #include "security_table.h"
 #include "superman.h"
 #include "packet.h"
@@ -44,30 +45,17 @@ void GetQueueInfo(int* length, int* maxLength)
 	read_unlock_bh(&queue_lock);
 }
 
-struct rt_info {
-	__u8 tos;
-	__u32 daddr;
-	__u32 saddr;
-};
-
-struct queue_entry {
-	struct list_head list;
-	struct sk_buff *skb;
-	int (*okfn) (struct sk_buff *);
-	struct rt_info rt_info;
-};
-
-typedef int (*queue_cmpfn) (struct queue_entry *, unsigned long);
+typedef int (*queue_cmpfn) (struct superman_packet_info*, unsigned long);
 
 
-static inline int __queue_enqueue_entry(struct queue_entry *entry)
+static inline int __queue_enqueue_entry(struct superman_packet_info* spi)
 {
 	if (queue_total >= queue_maxlen) {
 		if (net_ratelimit())
 			printk(KERN_WARNING "SUPERMAN queue: full at %d entries, dropping packet(s).\n", queue_total);
 		return -ENOSPC;
 	}
-	list_add(&entry->list, &queue_list);
+	list_add(&spi->list, &queue_list);
 	queue_total++;
 	return 0;
 }
@@ -76,35 +64,34 @@ static inline int __queue_enqueue_entry(struct queue_entry *entry)
  * Find and return a queued entry matched by cmpfn, or return the last
  * entry if cmpfn is NULL.
  */
-static inline struct queue_entry* __queue_find_entry(queue_cmpfn cmpfn, unsigned long data)
+static inline struct superman_packet_info* __queue_find_entry(queue_cmpfn cmpfn, unsigned long data)
 {
 	struct list_head *p;
 	list_for_each_prev(p, &queue_list) {
-		struct queue_entry *entry = (struct queue_entry *)p;
+		struct superman_packet_info *spi = (struct superman_packet_info*)p;
 
-		if (!cmpfn || cmpfn(entry, data))
-			return entry;
+		if (!cmpfn || cmpfn(spi, data))
+			return spi;
 	}
 	return NULL;
 }
 
-static inline struct queue_entry* __queue_find_dequeue_entry(queue_cmpfn cmpfn, unsigned long data)
+static inline struct superman_packet_info* __queue_find_dequeue_entry(queue_cmpfn cmpfn, unsigned long data)
 {
-	struct queue_entry *entry;
-	entry = __queue_find_entry(cmpfn, data);
-	if (entry == NULL)
+	struct superman_packet_info* spi;
+	spi = __queue_find_entry(cmpfn, data);
+	if (spi == NULL)
 		return NULL;
-	list_del(&entry->list);
+	list_del(&spi->list);
 	queue_total--;
-	return entry;
+	return spi;
 }
 
 static inline void __queue_flush(void)
 {
-	struct queue_entry *entry;
-	while ((entry = __queue_find_dequeue_entry(NULL, 0))) {
-		kfree_skb(entry->skb);
-		kfree(entry);
+	struct superman_packet_info* spi;
+	while ((spi = __queue_find_dequeue_entry(NULL, 0))) {
+		FreeSupermanPacketInfo(spi);
 	}
 }
 
@@ -113,13 +100,13 @@ static inline void __queue_reset(void)
 	__queue_flush();
 }
 
-static struct queue_entry* queue_find_dequeue_entry(queue_cmpfn cmpfn, unsigned long data)
+static struct superman_packet_info* queue_find_dequeue_entry(queue_cmpfn cmpfn, unsigned long data)
 {
-	struct queue_entry *entry;
+	struct superman_packet_info* spi;
 	write_lock_bh(&queue_lock);
-	entry = __queue_find_dequeue_entry(cmpfn, data);
+	spi = __queue_find_dequeue_entry(cmpfn, data);
 	write_unlock_bh(&queue_lock);
-	return entry;
+	return spi;
 }
 
 void FlushQueue(void)
@@ -129,54 +116,38 @@ void FlushQueue(void)
 	write_unlock_bh(&queue_lock);
 }
 
-int EnqueuePacket(struct sk_buff *skb, int (*okfn) (struct sk_buff *))
+int EnqueuePacket(struct superman_packet_info* spi, unsigned int (*callback_after_queue)(struct superman_packet_info*, bool))
 {
 	int status = -EINVAL;
-	struct queue_entry *entry;
-	struct iphdr *iph = ((struct iphdr *)skb_network_header(skb));
-	entry = kmalloc(sizeof(*entry), GFP_ATOMIC);
-	if (entry == NULL) {
-		printk(KERN_ERR "SUPERMAN queue: OOM in EnqueuePacket()\n");
-		return -ENOMEM;
-	}
+	spi->arg = callback_after_queue;
 
 	/* printk("enquing packet queue_len=%d\n", queue_total); */
-	entry->okfn = okfn;
-	entry->skb = skb;
-	entry->rt_info.tos = iph->tos;
-	entry->rt_info.daddr = iph->daddr;
-	entry->rt_info.saddr = iph->saddr;
-
 	write_lock_bh(&queue_lock);
-
-	status = __queue_enqueue_entry(entry);
-
+	status = __queue_enqueue_entry(spi);
 	if (status < 0)
 		goto err_out_unlock;
-
 	write_unlock_bh(&queue_lock);
 	return status;
 
 err_out_unlock:
 	write_unlock_bh(&queue_lock);
-	kfree(entry);
 
 	return status;
 }
 
-static inline int dest_cmp(struct queue_entry *e, unsigned long daddr)
+static inline int dest_cmp(struct superman_packet_info* spi, unsigned long daddr)
 {
-	return (daddr == e->rt_info.daddr);
+	return (daddr == spi->addr);
 }
 
 int FindQueuedPacket(__u32 daddr)
 {
-	struct queue_entry *entry;
+	struct superman_packet_info* spi;
 	int res = 0;
 
 	read_lock_bh(&queue_lock);
-	entry = __queue_find_entry(dest_cmp, daddr);
-	if (entry != NULL)
+	spi = __queue_find_entry(dest_cmp, daddr);
+	if (spi != NULL)
 		res = 1;
 
 	read_unlock_bh(&queue_lock);
@@ -185,57 +156,47 @@ int FindQueuedPacket(__u32 daddr)
 
 int SetVerdict(int verdict, __u32 daddr)
 {
-	struct queue_entry *entry;
+	struct superman_packet_info* spi;
 	int pkts = 0;
 
-	if (verdict == SUPERMAN_QUEUE_DROP) {
-
+	if (verdict == SUPERMAN_QUEUE_DROP)
+	{
 		while (1) {
-			entry = queue_find_dequeue_entry(dest_cmp, daddr);
+			spi = queue_find_dequeue_entry(dest_cmp, daddr);
 
-			if (entry == NULL)
+			if (spi == NULL)
 				return pkts;
 
 			/* Send an ICMP message informing the application that the
 			 * destination was unreachable. */
 			if (pkts == 0)
-				icmp_send(entry->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);
+				icmp_send(spi->skb, ICMP_DEST_UNREACH, ICMP_HOST_UNREACH, 0);
 
-			kfree_skb(entry->skb);
-			kfree(entry);
+			FreeSupermanPacketInfo(spi);
 			pkts++;
 		}
 
-	} else if (verdict == SUPERMAN_QUEUE_SEND) {
-		struct security_table_entry e;
+	}
+	else if (verdict == SUPERMAN_QUEUE_SEND)
+	{
+		struct security_table_entry* entry;
+		unsigned int (*callback_after_queue)(struct superman_packet_info*, bool);
 
 		while (1) {
-			entry = queue_find_dequeue_entry(dest_cmp, daddr);
+			spi = queue_find_dequeue_entry(dest_cmp, daddr);
 
-			if (entry == NULL)
+			if (spi == NULL)
 				return pkts;
 
-			if (!GetSecurityTableEntry(daddr, &e)) {
-				kfree_skb(entry->skb);
-				goto next;
-			}
-			//if (e.flags & KAODV_RT_GW_ENCAP)
-			{
-				// DO SOME SUPERMAN!
-				// We need to check whether we're E2E or P2P at this stage.
-				// ReceiveP2PPacket(entry->skb);
-				// or
-				// ReceiveE2EPacket(entry->skb);
-				// On failure, goto next;
-			}
+			callback_after_queue = (unsigned int (*)(struct superman_packet_info*, bool)) spi->arg;
+			spi->arg = NULL;
 
-			ip_route_me_harder(entry->skb, RTN_LOCAL);
+			if (GetSecurityTableEntry(daddr, &entry))
+				callback_after_queue(spi, true);
+			else
+				callback_after_queue(spi, false);
+
 			pkts++;
-
-			/* Inject packet */
-			entry->okfn(entry->skb);
-next:
-			kfree(entry);
 		}
 	}
 	return 0;

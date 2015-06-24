@@ -21,6 +21,9 @@
 #define NF_IP_NUMHOOKS		5
 #endif
 
+struct superman_packet_info;
+
+
 bool is_valid_packet(struct sk_buff *skb);
 bool is_superman_packet(struct sk_buff* skb);
 struct superman_header* get_superman_header(struct sk_buff *skb);

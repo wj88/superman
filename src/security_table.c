@@ -10,55 +10,6 @@
 
 #include "security_table.h"
 
-static uint32_t broadcast_key_len;
-static unsigned char* broadcast_key;
-
-bool UpdateBroadcastKey(uint32_t key_len, unsigned char* key)
-{
-	if(broadcast_key)
-	{
-		kfree(broadcast_key);
-		broadcast_key = NULL;
-	}
-	broadcast_key_len = key_len;
-	if(key_len > 0)
-	{
-		if((broadcast_key = kmalloc(key_len, GFP_ATOMIC)))
-		{
-			broadcast_key_len = key_len;
-			memcpy(broadcast_key, key, key_len);
-			return true;
-		}
-		else
-		{
-			printk(KERN_ERR "SUPERMAN: security_table - \"Out Of Memory\" in UpdateBroadcastKey\n");
-			return false;
-		}
-	}
-	return true;
-}
-
-bool HasBroadcastKey(void)
-{
-	return broadcast_key != NULL;
-}
-
-bool MallocAndCopyBroadcastKey(uint32_t* key_len, unsigned char** key)
-{
-	*key_len = 0;
-	*key = NULL;
-	if(
-		(!broadcast_key) &&
-		((*key = kmalloc(broadcast_key_len, GFP_ATOMIC)))
-	)
-	{
-		memcpy(*key, broadcast_key, broadcast_key_len);
-		*key_len = broadcast_key_len;
-		return true;
-	}
-	return false;
-}
-
 #define SECURITY_TABLE_MAX_LEN 1024
 
 static unsigned int security_table_len;
@@ -174,42 +125,60 @@ bool GetSecurityTableEntry(uint32_t daddr, struct security_table_entry** entry)
 	return false;
 }
 
-bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp)
+bool UpdateSecurityTableEntry(struct security_table_entry *e, uint32_t daddr, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
 {
-	struct security_table_entry *e;
-	bool r = false;
+	ClearSecurityTableEntry(e);
+	e->daddr = daddr;
+	e->flag = flag;
+	if(timestamp != -1) e->timestamp = timestamp;
+	if(timestamp != -1) e->ifindex = ifindex;
 
-	if(GetSecurityTableEntry(daddr, &e))
+	if(
+		((sk_len == 0) || (e->sk = kmalloc(sk_len, GFP_ATOMIC))) &&
+		((ske_len == 0) || (e->ske = kmalloc(ske_len, GFP_ATOMIC))) &&
+		((skp_len == 0) || (e->skp = kmalloc(skp_len, GFP_ATOMIC)))
+	)
 	{
-		e->daddr = daddr;
-		e->flag = flag;
+		e->sk_len = sk_len;
+		e->ske_len = ske_len;
+		e->skp_len = skp_len;
+		if(sk_len > 0) memcpy(e->sk, sk, sk_len);
+		if(ske_len > 0) memcpy(e->ske, ske, ske_len);
+		if(skp_len > 0) memcpy(e->skp, skp, skp_len);
+		return true;
+	}
+	else
+		return false;
+}
+
+void ClearSecurityTableEntry(struct security_table_entry *e)
+{
+	if(e)
+	{
 		if(e->sk) kfree(e->sk);
 		if(e->ske) kfree(e->ske);
 		if(e->skp) kfree(e->skp);
 		e->sk = NULL;
 		e->ske = NULL;
 		e->skp = NULL;
-		e->sk_len = sk_len;
-		e->ske_len = ske_len;
-		e->skp_len = skp_len;
+	}
+}
 
-		if(
-			((sk_len == 0) || (e->sk = kmalloc(sk_len, GFP_ATOMIC))) &&
-			((ske_len == 0) || (e->ske = kmalloc(ske_len, GFP_ATOMIC))) &&
-			((skp_len == 0) || (e->skp = kmalloc(skp_len, GFP_ATOMIC)))
-		)
-		{
-			if(sk_len > 0) memcpy(e->sk, sk, sk_len);
-			if(ske_len > 0) memcpy(e->ske, ske, ske_len);
-			if(skp_len > 0) memcpy(e->skp, skp, skp_len);
-			return true;
-		}
-		else
+bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
+{
+	struct security_table_entry *e;
+	bool r = false;
+
+	if(GetSecurityTableEntry(daddr, &e))
+	{
+		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
 		{
 			DeleteSecurityTableEntry(daddr);
 			printk(KERN_ERR "SUPERMAN: security_table - \"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
 			return false;
 		}
+		else
+			return true;
 	}
 	else
 	{
@@ -219,32 +188,12 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 			return false;
 		}
 
-		e->daddr = daddr;
-		e->flag = flag;
-		e->sk = NULL;
-		e->ske = NULL;
-		e->skp = NULL;
-		e->sk_len = sk_len;
-		e->ske_len = ske_len;
-		e->skp_len = skp_len;
-
-		if(!(
-			((sk_len == 0) || (e->sk = kmalloc(sk_len, GFP_ATOMIC))) &&
-			((ske_len == 0) || (e->ske = kmalloc(ske_len, GFP_ATOMIC))) &&
-			((skp_len == 0) || (e->skp = kmalloc(skp_len, GFP_ATOMIC)))
-		))
+		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
 		{
-			if(e->sk) kfree(e->sk);
-			if(e->ske) kfree(e->ske);
-			if(e->skp) kfree(e->skp);
-			kfree(e);
+			DeleteSecurityTableEntry(daddr);
 			printk(KERN_ERR "SUPERMAN: security_table - \"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
 			return false;
 		}
-
-		if(sk_len > 0) memcpy(e->sk, sk, sk_len);
-		if(ske_len > 0) memcpy(e->ske, ske, ske_len);
-		if(skp_len > 0) memcpy(e->skp, skp, skp_len);
 
 		write_lock_bh(&security_table_lock);
 		r = __security_table_add(e);
@@ -254,9 +203,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 
 		if(!r)
 		{
-			if(e->sk) kfree(e->sk);
-			if(e->ske) kfree(e->ske);
-			if(e->skp) kfree(e->skp);
+			ClearSecurityTableEntry(e);
 			kfree(e);
 		}
 
@@ -302,19 +249,11 @@ void FlushSecurityTable(void)
 void InitSecurityTable(void)
 {
 	security_table_len = 0;
-	broadcast_key_len = 0;
-	broadcast_key = NULL;
 }
 
 void DeInitSecurityTable(void)
 {
 	FlushSecurityTable();
-	if(broadcast_key)
-	{
-		kfree(broadcast_key);
-		broadcast_key = NULL;
-	}
-	broadcast_key_len = 0;
 }
 
 #endif

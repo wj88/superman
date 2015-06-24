@@ -1,6 +1,7 @@
 #ifdef __KERNEL__
 
 #include "superman.h"
+#include "security.h"
 #include "security_table.h"
 #include "queue.h"
 #include "proc.h"
@@ -15,6 +16,7 @@ int Init(void)
 {
 	printk(KERN_INFO "SUPERMAN: module is being loaded.\n");
 	InitProc();
+	InitSecurity();
 	InitSecurityTable();
 	InitQueue();
 	InitNetFilter();
@@ -28,6 +30,7 @@ void DeInit(void)
 	DeInitNetFilter();
 	DeInitQueue();
 	DeInitSecurityTable();
+	DeInitSecurity();
 	DeInitProc();
 	printk(KERN_INFO "SUPERMAN: module is being unloaded.\n");
 }

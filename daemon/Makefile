@@ -16,5 +16,5 @@ $(OUTPUT): $(SRCS)
 .PHONY: clean
 
 clean:
-	rm -f *.o *~ $(OUTPUT) core
+	rm -f *.o ../src/*.o *~ $(OUTPUT) core
 

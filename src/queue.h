@@ -4,12 +4,13 @@
 #ifdef __KERNEL__
 
 #include <linux/skbuff.h>
+#include "packet_info.h"
 
 #define SUPERMAN_QUEUE_DROP 1
 #define SUPERMAN_QUEUE_SEND 2
 
 int FindQueuedPacket(__u32 daddr);
-int EnqueuePacket(struct sk_buff *skb, int (*okfn) (struct sk_buff *));
+int EnqueuePacket(struct superman_packet_info* spi, unsigned int (*callback_after_queue)(struct superman_packet_info*, bool));
 int SetVerdict(int verdict, __u32 daddr);
 void FlushQueue(void);
 

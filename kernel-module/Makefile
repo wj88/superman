@@ -10,6 +10,7 @@ build:
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
+	rm ../src/*.o
 
 else
 
@@ -17,6 +18,6 @@ $(info $(KERNELDIR))
 $(info Building Superman with KERNELRELEASE = ${KERNELRELEASE})
 
 obj-m := superman.o
-superman-y := ../src/netfilter.o ../src/packet.o ../src/queue.o ../src/security_table.o ../src/proc.o ../src/netlink.o ../src/processor.o ../src/init.o
+superman-y := ../src/packet_info.o ../src/netfilter.o ../src/packet.o ../src/queue.o ../src/security_table.o ../src/security.o ../src/proc.o ../src/netlink.o ../src/processor.o ../src/init.o
 
 endif

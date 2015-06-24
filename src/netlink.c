@@ -135,6 +135,8 @@ enum {
 	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SK,
 	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKE,
 	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP,
+	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_TIMESTAMP,
+	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_IFINDEX,
 	__K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_LAST,
 };
 #define K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_MIN (__K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_FIRST + 1)
@@ -148,6 +150,8 @@ typedef struct k_update_superman_security_table_entry_msg {
 	unsigned char*	ske;
 	uint32_t	skp_len;
 	unsigned char*	skp;
+	int32_t		timestamp;
+	int32_t		ifindex;
 } k_update_superman_security_table_entry_msg_t;
 static struct nla_policy k_update_superman_security_table_entry_genl_policy[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_MAX + 1] = {
 	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_ADDRESS]					=	{ .type = NLA_U32	},
@@ -155,22 +159,35 @@ static struct nla_policy k_update_superman_security_table_entry_genl_policy[K_UP
 	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SK]					=	{ .type = NLA_UNSPEC	},
 	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKE]					=	{ .type = NLA_UNSPEC	},
 	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP]					=	{ .type = NLA_UNSPEC	},
+	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_TIMESTAMP]					=	{ .type = NLA_UNSPEC	},
+	[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_IFINDEX]					=	{ .type = NLA_UNSPEC	},
 };
 
 // K_UPDATE_SUPERMAN_BROADCAST_KEY
 enum {
 	__K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_FIRST = 0,
-	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY,
+	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SK,
+	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKE,
+	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKP,
+	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_OVERWRITE,	
 	__K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_LAST,
 };
 #define K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MIN (__K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_FIRST + 1)
 #define K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MAX (__K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_LAST - 1)
 typedef struct k_update_superman_broadcast_key_msg {
-	uint32_t	broadcast_key_len;
-	unsigned char*	broadcast_key;
+	uint32_t	sk_len;
+	unsigned char*	sk;
+	uint32_t	ske_len;
+	unsigned char*	ske;
+	uint32_t	skp_len;
+	unsigned char*	skp;
+	bool		overwrite;
 } k_update_superman_broadcast_key_msg_t;
 static struct nla_policy k_update_superman_broadcast_key_genl_policy[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MAX + 1] = {
-	[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY]					=	{ .type = NLA_UNSPEC	},
+	[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SK]						=	{ .type = NLA_UNSPEC	},
+	[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKE]						=	{ .type = NLA_UNSPEC	},
+	[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKP]						=	{ .type = NLA_UNSPEC	},
+	[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_OVERWRITE]					=	{ .type = NLA_FLAG	},
 };
 
 // K_SEND_SUPERMAN_DISCOVERY_REQUEST
@@ -233,7 +250,6 @@ enum {
 	__K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_FIRST = 0,
 	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS,
 	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,
-	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY,
 	__K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_LAST,
 };
 #define K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MIN (__K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_FIRST + 1)
@@ -242,13 +258,10 @@ typedef struct k_send_superman_certificate_exchange_with_broadcast_key_msg {
 	uint32_t	address;
 	uint32_t	certificate_len;
 	unsigned char*	certificate;
-	uint32_t	broadcast_key_len;
-	unsigned char*	broadcast_key;
 } k_send_superman_certificate_exchange_with_broadcast_key_msg_t;
 static struct nla_policy k_send_superman_certificate_exchange_with_broadcast_key_genl_policy[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX + 1] = {
 	[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS]			=	{ .type = NLA_U32	},
 	[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE]		=	{ .type = NLA_UNSPEC	},
-	[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY]		=	{ .type = NLA_UNSPEC	},
 };
 
 // K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE
@@ -287,6 +300,8 @@ enum {
 	__D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_FIRST = 0,
 	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS,
 	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,
+	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_TIMESTAMP,
+	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_IFINDEX,
 	__D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_LAST,
 };
 #define D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_MIN (__D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_FIRST + 1)
@@ -295,10 +310,14 @@ typedef struct d_received_superman_discovery_request_msg {
 	uint32_t	address;
 	uint32_t	sk_len;
 	unsigned char*	sk;
+	int32_t		timestamp;
+	int32_t		ifindex;
 } d_received_superman_discovery_request_msg_t;
 static struct nla_policy d_received_superman_discovery_request_genl_policy[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_MAX + 1] = {
 	[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS]					=	{ .type = NLA_U32	},
 	[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK]						=	{ .type = NLA_UNSPEC	},
+	[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_TIMESTAMP]					=	{ .type = NLA_UNSPEC	},
+	[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_IFINDEX]					=	{ .type = NLA_UNSPEC	},
 };
 
 // D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST
@@ -306,6 +325,8 @@ enum {
 	__D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_FIRST = 0,
 	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,
 	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,
+	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_TIMESTAMP,
+	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_IFINDEX,
 	__D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_LAST,
 };
 #define D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MIN (__D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_FIRST + 1)
@@ -314,10 +335,14 @@ typedef struct d_received_superman_certificate_request_msg {
 	uint32_t	address;
 	uint32_t	sk_len;
 	unsigned char*	sk;
+	int32_t		timestamp;
+	int32_t		ifindex;
 } d_received_superman_certificate_request_msg_t;
 static struct nla_policy d_received_superman_certificate_request_genl_policy[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX + 1] = {
 	[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS]					=	{ .type = NLA_U32	},
 	[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK]					=	{ .type = NLA_UNSPEC	},
+	[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_TIMESTAMP]				=	{ .type = NLA_UNSPEC	},
+	[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_IFINDEX]					=	{ .type = NLA_UNSPEC	},
 };
 
 // D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE
@@ -466,6 +491,8 @@ int k_update_superman_security_table_entry(struct sk_buff *skb_msg, struct genl_
 	unsigned char*	ske;
 	uint32_t	skp_len;
 	unsigned char*	skp;
+	int32_t		timestamp;
+	int32_t		ifindex;
 	GENL_PARSE(K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_MAX, k_update_superman_security_table_entry_genl_policy)
 	address = nla_get_u32(attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_ADDRESS]);
 	flag = nla_get_u8(attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_FLAG]);
@@ -478,8 +505,10 @@ int k_update_superman_security_table_entry(struct sk_buff *skb_msg, struct genl_
 	skp_len = nla_len(attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP]);
 	skp = kmalloc(skp_len, GFP_ATOMIC);
 	nla_memcpy(skp, attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP], skp_len);
+	nla_memcpy(&timestamp, attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_TIMESTAMP], sizeof(int32_t));
+	nla_memcpy(&ifindex, attrs[K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_IFINDEX], sizeof(int32_t));
 
-	UpdateSupermanSecurityTableEntry(address, flag, sk_len, sk, ske_len, ske, skp_len, skp);
+	UpdateSupermanSecurityTableEntry(address, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex);
 
 	kfree(sk);
 	kfree(ske);
@@ -490,16 +519,31 @@ int k_update_superman_security_table_entry(struct sk_buff *skb_msg, struct genl_
 
 int k_update_superman_broadcast_key(struct sk_buff *skb_msg, struct genl_info *info)
 {
-	uint32_t broadcast_key_len;
-	unsigned char* broadcast_key;
+	uint32_t sk_len;
+	unsigned char* sk;
+	uint32_t ske_len;
+	unsigned char* ske;
+	uint32_t skp_len;
+	unsigned char* skp;
+	bool overwrite;
+
 	GENL_PARSE(K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MAX, k_update_superman_broadcast_key_genl_policy)
-	broadcast_key_len = nla_len(attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY]);
-	broadcast_key = kmalloc(broadcast_key_len, GFP_ATOMIC);
-	nla_memcpy(broadcast_key, attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY], broadcast_key_len);
+	sk_len = nla_len(attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SK]);
+	sk = kmalloc(sk_len, GFP_ATOMIC);
+	nla_memcpy(sk, attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SK], sk_len);
+	ske_len = nla_len(attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKE]);
+	ske = kmalloc(ske_len, GFP_ATOMIC);
+	nla_memcpy(ske, attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKE], ske_len);
+	skp_len = nla_len(attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKP]);
+	skp = kmalloc(skp_len, GFP_ATOMIC);
+	nla_memcpy(skp, attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKP], skp_len);
+	overwrite = nla_get_flag(attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_OVERWRITE]);
 
-	UpdateSupermanBroadcastKey(broadcast_key_len, broadcast_key);
+	UpdateSupermanBroadcastKey(sk_len, sk, ske_len, ske, skp_len, skp, overwrite);
 
-	kfree(broadcast_key);
+	kfree(sk);
+	kfree(ske);
+	kfree(skp);
 
 	return 0;
 }
@@ -568,21 +612,15 @@ int k_send_superman_certificate_exchange_with_broadcast_key(struct sk_buff *skb_
 	uint32_t address;
 	uint32_t certificate_len;
 	unsigned char* certificate;
-	uint32_t broadcast_key_len;
-	unsigned char* broadcast_key;
 	GENL_PARSE(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_MAX, k_send_superman_certificate_exchange_with_broadcast_key_genl_policy)
 	address = nla_get_u32(attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS]);
 	certificate_len = nla_len(attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE]);
 	certificate = kmalloc(certificate_len, GFP_ATOMIC);
 	nla_memcpy(certificate, attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE], certificate_len);
-	broadcast_key_len = nla_len(attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY]);
-	broadcast_key = kmalloc(broadcast_key_len, GFP_ATOMIC);
-	nla_memcpy(broadcast_key, attrs[K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY], broadcast_key_len);
 
-	SendSupermanCertificateExchangeWithBroadcastKey(address, certificate_len, certificate, broadcast_key_len, broadcast_key);
+	SendSupermanCertificateExchangeWithBroadcastKey(address, certificate_len, certificate);
 
 	kfree(certificate);
-	kfree(broadcast_key);
 
 	return 0;
 }
@@ -668,6 +706,8 @@ int d_received_superman_discovery_request(struct nlmsghdr *nlh)
 	uint32_t address;
 	uint32_t sk_len;
 	unsigned char* sk;
+	int32_t timestamp;
+	int32_t ifindex;
 
 	printf("Netlink: \tGradding the source IP address...\n");
 	address = nla_get_u32(attrs[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS]);
@@ -679,8 +719,10 @@ int d_received_superman_discovery_request(struct nlmsghdr *nlh)
 	sk = malloc(sk_len);
 	printf("Netlink: \tCopying over the SK...\n");
 	nla_memcpy(sk, attrs[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK], sk_len);
+	nla_memcpy(&timestamp, attrs[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_TIMESTAMP], sizeof(int32_t));
+	nla_memcpy(&ifindex, attrs[D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_IFINDEX], sizeof(int32_t));
 
-	ReceivedSupermanDiscoveryRequest(address, sk_len, sk);
+	ReceivedSupermanDiscoveryRequest(address, sk_len, sk, timestamp, ifindex);
 
 	printf("Netlink: \tFreeing up the SK memory...\n");
 	free(sk);
@@ -696,13 +738,17 @@ int d_received_superman_certificate_request(struct nlmsghdr *nlh)
 	uint32_t address;
 	uint32_t sk_len;
 	unsigned char* sk;
+	int32_t timestamp;
+	int32_t ifindex;
 
 	address = nla_get_u32(attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS]);
 	sk_len = nla_len(attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK]);
 	sk = malloc(sk_len);
 	nla_memcpy(sk, attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK], sk_len);
+	nla_memcpy(&timestamp, attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_TIMESTAMP], sizeof(int32_t));
+	nla_memcpy(&ifindex, attrs[D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_IFINDEX], sizeof(int32_t));
 
-	ReceivedSupermanCertificateRequest(address, sk_len, sk);
+	ReceivedSupermanCertificateRequest(address, sk_len, sk, timestamp, ifindex);
 
 	free(sk);
 
@@ -971,22 +1017,27 @@ static struct genl_ops superman_ops[SUPERMAN_MAX] = {
 
 #define D_GENL_CALC_NLA_SIZE(contents) nlmsg_alloc()
 
-void UpdateSupermanSecurityTableEntry(uint32_t address, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp)
+void UpdateSupermanSecurityTableEntry(uint32_t address, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
 {
 	D_GENL_START(K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY, nla_total_size(4) + nla_total_size(1) + nla_total_size(sk_len) + nla_total_size(ske_len) + nla_total_size(skp_len))
 	if(	nla_put_u32	(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_ADDRESS,							address		) ||
 		nla_put_u8	(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_FLAG,							flag		) ||
 		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SK,					sk_len,			sk		) ||
-		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKE,				ske_len,		skp		) ||
-		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP,				ske_len,		skp		))
+		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKE,				ske_len,		ske		) ||
+		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SKP,				skp_len,		skp		) ||
+		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_TIMESTAMP,				sizeof(int32_t),	&timestamp	) ||
+		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_IFINDEX,				sizeof(int32_t),	&ifindex	))
 		fail = 1;
 	D_GENL_FINISH
 }
 
-void UpdateSupermanBroadcastKey(uint32_t broadcast_key_len, unsigned char* broadcast_key)
+void UpdateSupermanBroadcastKey(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, bool overwrite)
 {
 	D_GENL_START(K_UPDATE_SUPERMAN_BROADCAST_KEY, nla_total_size(broadcast_key_len))
-	if(	nla_put		(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_BROADCAST_KEY,				broadcast_key_len,	broadcast_key	))
+	if(	nla_put		(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SK,					sk_len,			sk		) ||
+		nla_put		(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKE,					ske_len,		ske		) ||
+		nla_put		(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKP,					skp_len,		skp		) ||
+		nla_put_flag	(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_OVERWRITE										))
 		fail = 1;
 	D_GENL_FINISH
 }
@@ -1017,12 +1068,11 @@ void SendSupermanCertificateExchange(uint32_t address, uint32_t certificate_len,
 	D_GENL_FINISH
 }
 
-void SendSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key)
+void SendSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t certificate_len, unsigned char* certificate)
 {
 	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY, nla_total_size(4) + nla_total_size(certificate_len) + nla_total_size(broadcast_key_len))
 	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS,					address		) ||
-		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,	certificate_len,	certificate	) ||
-		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY,	broadcast_key_len,	broadcast_key	))
+		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,	certificate_len,	certificate	))
 		fail = 1;
 	D_GENL_FINISH
 }
@@ -1100,20 +1150,24 @@ void SendSupermanSKInvalidate(uint32_t address)
 			nlmsg_free(skb);										\
 	}
 	
-void ReceivedSupermanDiscoveryRequest(uint32_t address, uint32_t sk_len, unsigned char* sk)
+void ReceivedSupermanDiscoveryRequest(uint32_t address, uint32_t sk_len, unsigned char* sk, int32_t timestamp, int32_t ifindex)
 {
 	K_GENL_START(D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST, nla_total_size(4) + nla_total_size(sk_len))
 	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS,							address		) ||
-		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,					sk_len,			sk		))
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,					sk_len,			sk		) ||
+		nla_put		(msg,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_TIMESTAMP,				sizeof(int32_t),	&timestamp	) ||
+		nla_put		(msg,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_IFINDEX,				sizeof(int32_t),	&ifindex	))
 		fail = 1;
 	K_GENL_FINISH
 }
 
-void ReceivedSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned char* sk)
+void ReceivedSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned char* sk, int32_t timestamp, int32_t ifindex)
 {
 	K_GENL_START(D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST, nla_total_size(4) + nla_total_size(sk_len))
 	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,							address		) ||
-		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,				sk_len,			sk		))
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,				sk_len,			sk		) ||
+		nla_put		(msg,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_TIMESTAMP,				sizeof(int32_t),	&timestamp	) ||
+		nla_put		(msg,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_IFINDEX,				sizeof(int32_t),	&ifindex	))
 		fail = 1;
 	K_GENL_FINISH
 }
@@ -1132,7 +1186,7 @@ void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t certificate_
 	}
 }
 
-void ReceivedSupermanCertificateExchangeWithBroadcasstKey(uint32_t address, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key)
+void ReceivedSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key)
 {
 	struct security_table_entry* e = NULL;
 	if(GetSecurityTableEntry(address, &e))

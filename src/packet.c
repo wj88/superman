@@ -19,6 +19,18 @@ static inline u_int8_t _decode_ip_protocol(u_int8_t superman_protocol)
 	return superman_protocol - SUPERMAN_MAX_TYPE;
 }
 
+inline bool is_superman_packet(struct sk_buff* skb)
+{
+	// Does this IPv4 packet contain superman payload?
+	return (ip_hdr(skb)->protocol == SUPERMAN_PROTOCOL_NUM);
+}
+
+inline struct superman_header* get_superman_header(struct sk_buff *skb)
+{
+	return (struct superman_header*)skb_transport_header(skb);
+}
+
+
 void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 {
 	struct net_device *dev;
@@ -93,6 +105,16 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	read_unlock(&dev_base_lock);
 
 	printk(KERN_INFO "SUPERMAN: Packet - ... Discovery Request done.\n");
+}
+
+void SendCertificateRequest(uint32_t sk_len, unsigned char* sk)
+{
+
+}
+
+void SendAuthenticatedSKRequest(__be32 addr)
+{
+
 }
 
 #endif
