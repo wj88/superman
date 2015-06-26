@@ -19,7 +19,7 @@ struct security_table_entry {
 	int32_t		ifindex;
 };
 
-void InitSecurityTable(void);
+bool InitSecurityTable(void);
 void DeInitSecurityTable(void);
 void FlushSecurityTable(void);
 

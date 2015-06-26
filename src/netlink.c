@@ -17,6 +17,7 @@
 static struct nl_sock *nlsk = NULL;
 static int superman_mc_group_id = -1;
 struct nl_cache *genl_cache = NULL;
+int superman_family_id = -1;										\
 
 #endif
 
@@ -979,41 +980,31 @@ static struct genl_ops superman_ops[SUPERMAN_MAX] = {
 
 #define D_GENL_START(K_SUPERMAN_OPERATION, ATTRS_SIZE)								\
 	struct nl_msg *msg;											\
-	int superman_family_id;											\
 	int fail = 0;												\
 														\
 	printf("Netlink: Constructing the netlink message...\n");						\
 														\
-	/* Find the SUPERMAN family identifier. */								\
-	superman_family_id = genl_ctrl_resolve(nlsk, K_SUPERMAN_FAMILY_NAME);					\
+	/* Construct a new message */										\
+	msg = nlmsg_alloc();											\
+	/*msg = nlmsg_alloc_size(sizeof(struct genlmsghdr) + ATTRS_SIZE);*/					\
 														\
-	if(superman_family_id >= 0)										\
-	{													\
-		/* Construct a new message */									\
-		msg = nlmsg_alloc();										\
-		/*msg = nlmsg_alloc_size(sizeof(struct genlmsghdr) + ATTRS_SIZE);*/				\
+	/* Add the Generic Netlink header to the netlink message. */						\
+	genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, superman_family_id, 0, 0, K_SUPERMAN_OPERATION, 0);		\
 														\
-		/* Add the Generic Netlink header to the netlink message. */					\
-		genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, superman_family_id, 0, 0, K_SUPERMAN_OPERATION, 0);	\
-														\
-		printf("Netlink: Adding the attributes to the message...\n");
+	printf("Netlink: Adding the attributes to the message...\n");
 
 #define D_GENL_FINISH \
-		if(fail == 0) {											\
-			printf("Netlink: Sending the netlink message...\n");					\
-			/* Send the message over the netlink socket */						\
-			nl_send_auto(nlsk, msg);								\
-		}												\
-		else {												\
-			printf("Netlink: Failed to add the attributes to the message.\n");			\
-		}												\
-														\
-		/* Cleanup */											\
-		nlmsg_free(msg);										\
+	if(fail == 0) {												\
+		printf("Netlink: Sending the netlink message...\n");						\
+		/* Send the message over the netlink socket */							\
+		nl_send_auto(nlsk, msg);									\
 	}													\
 	else {													\
-		printf("Netlink: No SUPERMAN netlink family found. Is the SUPERMAN kernel module loaded?\n");	\
-	}
+		printf("Netlink: Failed to add the attributes to the message.\n");				\
+	}													\
+														\
+	/* Cleanup */												\
+	nlmsg_free(msg);											
 
 #define D_GENL_CALC_NLA_SIZE(contents) nlmsg_alloc()
 
@@ -1155,8 +1146,8 @@ void ReceivedSupermanDiscoveryRequest(uint32_t address, uint32_t sk_len, unsigne
 	K_GENL_START(D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST, nla_total_size(4) + nla_total_size(sk_len))
 	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS,							address		) ||
 		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,					sk_len,			sk		) ||
-		nla_put		(msg,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_TIMESTAMP,				sizeof(int32_t),	&timestamp	) ||
-		nla_put		(msg,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_IFINDEX,				sizeof(int32_t),	&ifindex	))
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_TIMESTAMP,				sizeof(int32_t),	&timestamp	) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_IFINDEX,				sizeof(int32_t),	&ifindex	))
 		fail = 1;
 	K_GENL_FINISH
 }
@@ -1166,8 +1157,8 @@ void ReceivedSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsig
 	K_GENL_START(D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST, nla_total_size(4) + nla_total_size(sk_len))
 	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,							address		) ||
 		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,				sk_len,			sk		) ||
-		nla_put		(msg,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_TIMESTAMP,				sizeof(int32_t),	&timestamp	) ||
-		nla_put		(msg,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_IFINDEX,				sizeof(int32_t),	&ifindex	))
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_TIMESTAMP,				sizeof(int32_t),	&timestamp	) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_IFINDEX,				sizeof(int32_t),	&ifindex	))
 		fail = 1;
 	K_GENL_FINISH
 }
@@ -1280,19 +1271,29 @@ bool InitNetlink(void)
 		DeInitNetlink();
 		return false;
 	}
+
+	// Find the SUPERMAN family identifier.
+	superman_family_id = genl_ctrl_resolve(nlsk, K_SUPERMAN_FAMILY_NAME);
+	if(superman_family_id < 0)
+	{
+		printf("Netlink: No SUPERMAN netlink family found. Is the SUPERMAN kernel module loaded?\n");
+		DeInitNetlink();
+		return false;
+	}
+
 	
 	// Resolve keymon muilticast group 
 	superman_mc_group_id = genl_ctrl_resolve_grp(nlsk, K_SUPERMAN_FAMILY_NAME, K_SUPERMAN_MC_GROUP_NAME);
 	if(superman_mc_group_id < 0)
 	{
-		printf("Netlink: genl_ctrl_resolve_grp failed, rc %d\n", superman_mc_group_id);
+		printf("Netlink: Unabled to resolve the netlink group. Check to see if the kernel module is running, rc %d\n", superman_mc_group_id);
 		DeInitNetlink();
 		return false;
 	}
 
 	// Join keymon multicast group
 	rc = nl_socket_add_memberships(nlsk, superman_mc_group_id, 0);
-	if ( rc < 0 )
+	if (rc < 0)
 	{
 		printf("Netlink: nl_socket_add_membership failed, rc %d\n", rc);
 		superman_mc_group_id = -1;

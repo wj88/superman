@@ -14,9 +14,10 @@ int EnqueuePacket(struct superman_packet_info* spi, unsigned int (*callback_afte
 int SetVerdict(int verdict, __u32 daddr);
 void FlushQueue(void);
 
-void InitQueue(void);
+bool InitQueue(void);
 void DeInitQueue(void);
-void GetQueueInfo(int* length, int* maxLength);
+
+int queue_info_proc_show(struct seq_file *m, void *v);
 
 #endif
 

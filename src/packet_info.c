@@ -6,9 +6,10 @@
 #include "security_table.h"
 
 // A useful function shamelessly stolen from the AODV-UU implementation.
-static inline int if_info_from_ifindex(struct in_addr *addr, struct in_addr *baddr, const struct net_device *dev)
+static inline int if_info_from_net_device(struct in_addr *addr, struct in_addr *baddr, const struct net_device *dev)
 {
 	struct in_device *indev;
+	bool found = false;
 
 	// Hold a reference to the device to prevent it from being freed.
 	indev = in_dev_get(dev);
@@ -16,22 +17,32 @@ static inline int if_info_from_ifindex(struct in_addr *addr, struct in_addr *bad
 	{
 		struct in_ifaddr **ifap;
 		struct in_ifaddr *ifa;
+		bool found = false;
 
 		// Search through the list for a matching device name.
+		
 		for (ifap = &indev->ifa_list; (ifa = *ifap) != NULL; ifap = &ifa->ifa_next)
+		{
 			if (!strcmp(dev->name, ifa->ifa_label))
+			{
+				found = true;
 				break;
+			}
+		}
 
-		if (addr)
-			addr->s_addr = ifa->ifa_address;
-		if (baddr)
-			baddr->s_addr = ifa->ifa_broadcast;
+		if(found)
+		{
+			if (addr)
+				addr->s_addr = ifa->ifa_address;
+			if (baddr)
+				baddr->s_addr = ifa->ifa_broadcast;
+		}
 
 		// Release our reference to the device.
 		in_dev_put(indev);
 	}
 
-	return 0;
+	return found;
 }
 
 struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
@@ -64,12 +75,12 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	memset(&spi->bcaddr, 0, sizeof(struct in_addr));
 	if(spi->hooknum == NF_INET_PRE_ROUTING || spi->hooknum == NF_INET_LOCAL_IN)
 	{
-		if_info_from_ifindex(&spi->ifaddr, &spi->bcaddr, spi->in);
+		if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->in);
 		spi->addr = spi->iph->saddr;
 	}
 	else if(spi->hooknum == NF_INET_POST_ROUTING || spi->hooknum == NF_INET_LOCAL_OUT || spi->hooknum == NF_INET_FORWARD)
 	{
-		if_info_from_ifindex(&spi->ifaddr, &spi->bcaddr, spi->out);
+		if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->out);
 		spi->addr = spi->iph->daddr;
 	}
 	else

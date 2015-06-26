@@ -1,3 +1,4 @@
+#include "superman.h"
 #include "processor.h"
 #include "netlink.h"
 
@@ -24,7 +25,7 @@ void SendSupermanDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
 
 void SendSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned char* sk)
 {
-	// SendSupermanCertificateRequestPacket(sk_len, sk);
+	SendCertificateRequestPacket(address, sk_len, sk);
 }
 
 void SendSupermanCertificateExchange(uint32_t address, uint32_t certificate_len, unsigned char* certificate)
@@ -40,18 +41,18 @@ void SendSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t 
 	// Get a reference to the actual key, no need for a copy.
 	if(GetBroadcastKey(&bkey_len, &bkey))
 	{
-		// SendSupermanCertificateExchangeWithBroadcastKeyPacket(address, certificate_len, certificate, bkey_len, bkey);	
+		// SendCertificateExchangeWithBroadcastKeyPacket(address, certificate_len, certificate, bkey_len, bkey);	
 	} 
 }
 
 void SendSupermanBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key)
 {
-	// SendSupermanBroadcastKeyExchangePacket(broadcast_key_len, broadcast_key);
+	// SendBroadcastKeyExchangePacket(broadcast_key_len, broadcast_key);
 }
 
 void SendSupermanSKInvalidate(uint32_t address)
 {
-	// SendSupermanSKInvalidatePacket(address);
+	// SendSKInvalidatePacket(address);
 }
 
 #else
@@ -64,20 +65,29 @@ void ReceivedSupermanDiscoveryRequest(uint32_t address, uint32_t sk_len, unsigne
 	unsigned char* ske;
 	uint32_t skp_len;
 	unsigned char* skp;
+
+	printf("Processor: \tObtaining SKE and SKP from the SK (sk_len: %u, sk: %u)...\n", sk_len, (uint32_t)((void*)sk));
 	if(MallocAndDHAndGenerateSharedkeys(sk_len, sk, &ske_len, &ske, &skp_len, &skp))
 	{
+		printf("Processor: \tRequesting a security table update...\n");
 		UpdateSupermanSecurityTableEntry(address, 1, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex);
 
 		uint32_t our_sk_len;
 		unsigned char* our_sk;
+		printf("Processor: \tGrabbing our SK...\n");
 		if(MallocAndCopyPublickey(&our_sk_len, &our_sk))
 		{
+			printf("Processor: \tRequesting to send a certificate request...\n");
 			SendSupermanCertificateRequest(address, our_sk_len, our_sk);
 			free(our_sk);
 		}
 
 		free(ske);
 		free(skp);
+	}
+	else
+	{
+		printf("Processor: \tFailed to generate SKE and SKP from the given SK.\n");
 	}
 }
 
@@ -105,7 +115,7 @@ void ReceivedSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsig
 
 void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t sk_len, unsigned char* sk, uint32_t certificate_len, unsigned char* certificate)
 {
-	if(VerifyCertificate(certificate, sk, sk_len))
+	if(VerifyCertificate(certificate_len, certificate, sk, sk_len))
 	{
 		uint32_t ske_len;
 		unsigned char* ske;
@@ -161,7 +171,7 @@ void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t sk_len, unsi
 
 void ReceivedSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t sk_len, unsigned char* sk, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key)
 {
-	if(VerifyCertificate(certificate, sk, sk_len))
+	if(VerifyCertificate(certificate_len, certificate, sk, sk_len))
 	{
 		uint32_t ske_len;
 		unsigned char* ske;

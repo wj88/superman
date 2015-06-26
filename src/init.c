@@ -1,6 +1,7 @@
 #ifdef __KERNEL__
 
 #include "superman.h"
+#include "init.h"
 #include "security.h"
 #include "security_table.h"
 #include "queue.h"
@@ -15,22 +16,42 @@ Init and DeInit are our modules entry points.
 int Init(void)
 {
 	printk(KERN_INFO "SUPERMAN: module is being loaded.\n");
-	InitProc();
-	InitSecurity();
-	InitSecurityTable();
-	InitQueue();
-	InitNetFilter();
-	InitNetlink();
-	return 0;
+	if(InitProc())
+	{	
+		if(InitQueue())
+		{
+			if(InitSecurityTable())
+			{
+				if(InitSecurity())
+				{
+					if(InitNetlink())
+					{
+						if(InitNetFilter())
+						{
+							printk(KERN_INFO "SUPERMAN: module loaded successfully.\n");
+							return 0;
+						}
+						DeInitNetlink();
+					}
+					DeInitSecurity();
+				}
+				DeInitSecurityTable();
+			}
+			DeInitQueue();
+		}
+		DeInitProc();
+	}
+	printk(KERN_INFO "SUPERMAN: module failed to load.\n");
+	return -1;
 }
 
 void DeInit(void)
 {
-	DeInitNetlink();
 	DeInitNetFilter();
-	DeInitQueue();
-	DeInitSecurityTable();
+	DeInitNetlink();
 	DeInitSecurity();
+	DeInitSecurityTable();
+	DeInitQueue();
 	DeInitProc();
 	printk(KERN_INFO "SUPERMAN: module is being unloaded.\n");
 }

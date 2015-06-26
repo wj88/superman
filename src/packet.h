@@ -56,8 +56,8 @@ inline struct superman_header* get_superman_header(struct sk_buff *skb);
 
 
 void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk);
-void SendCertificateRequest(uint32_t sk_len, unsigned char* sk);
-void SendAuthenticatedSKRequest(__be32 addr);
+void SendCertificateRequestPacket(__be32 addr, uint32_t sk_len, unsigned char* sk);
+void SendAuthenticatedSKRequestPacket(__be32 addr);
 
 /*
 void SendCertificateRequest(struct sk_buff* rx_sk);

@@ -5,7 +5,7 @@
 
 #include "superman.h"
 
-void InitProc(void);
+bool InitProc(void);
 void DeInitProc(void);
 
 #endif

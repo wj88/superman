@@ -25,8 +25,14 @@ Our /proc/superman/version file displays the active superman version.
 
 static int version_proc_show(struct seq_file *m, void *v)
 {
-    seq_printf(m, "The active Superman version is %d.%d\n", SUPERMAN_VERSION_MAJOR, SUPERMAN_VERSION_MINOR);
-    return 0;
+	// Inject a bit of ASCII ART fun into an otherwise boring version output.
+	seq_printf(m,
+"\n"
+"SUPERMAN - Security Under Pre-Existing Routing in Mobile Area Networks\n\n"
+"            _____________________________________________\n           //:::::::::::::::::::::::::::::::::::::::::::::\\\\\n         //:::_______:::::::::________::::::::::_____:::::::\\\\\n       //:::_/   _-\"\":::_--\"\"\"        \"\"\"--_::::\\_  ):::::::::\\\\\n      //:::/    /:::::_\"                    \"-_:::\\/:::::|^\\:::\\\\\n     //:::/   /~::::::I__                      \\:::::::::|  \\:::\\\\\n     \\\\:::\\   (::::::::::\"\"\"\"---___________     \"--------\"  /::://\n      \\\\:::\\  |::::::::::::::::::::::::::::\"\"\"\"==____      /::://\n       \\\\:::\"\\/::::::::::::::::::::::::::::::::::::::\\   /~::://\n         \\\\:::::::::::::::::::::::::::::::::::::::::::)/~::://\n           \\\\::::\\\"\"\"\"\"\"------_____::::::::::::::::::::::://\n             \\\\:::\"\\               \"\"\"\"\"-----_____:::::://\n               \\\\:::\"\\    __----__                )::://\n                 \\\\:::\"\\/~::::::::~\\_         __/~:://\n                   \\\\::::::::::::::::\"\"----\"\"\":::://\n                     \\\\::::::::::::::::::::::::://\n                       \\\\:::\\^\"\"--._.--\"\"^/::://\n                         \\\\::\"\\         /\":://\n                           \\\\::\"\\     /\":://\n                             \\\\::\"\\_/\":://\n                               \\\\:::::// 				\n"
+"                                 \\\\_//\n                                   \"\n\n"
+"                The active SUPERMAN version is %d.%d\n\n", SUPERMAN_VERSION_MAJOR, SUPERMAN_VERSION_MINOR);
+	return 0;
 }
 
 static int version_proc_open(struct inode *inode, struct file *file)
@@ -46,16 +52,6 @@ static const struct file_operations version_proc_fops = {
 Our /proc/superman/queue_info file display the queue information.
 */
 
-static int queue_info_proc_show(struct seq_file *m, void *v)
-{
-	int length, maxLength;
-	GetQueueInfo(&length, &maxLength);
-	
-    	seq_printf(m, "Queue length      : %u\n"
-		      "Queue max. length : %u\n", length, maxLength);
-
-	return 0;
-}
 
 static int queue_info_proc_open(struct inode *inode, struct file *file)
 {
@@ -91,16 +87,18 @@ static const struct file_operations security_table_info_proc_fops = {
 The proc entry init and deinit functions deal with construction and destruction.
 */
 
-void InitProc(void)
+bool InitProc(void)
 {
 	/* create /proc/superman */
 	this_proc_dir = proc_mkdir("superman", NULL);
 	if (!this_proc_dir)
-		return;
+		return false;
 
 	proc_create("version", 0, this_proc_dir, &version_proc_fops);
 	proc_create("queue_info", 0, this_proc_dir, &queue_info_proc_fops);
 	proc_create("security_table", 0, this_proc_dir, &security_table_info_proc_fops);
+
+	return true;
 }
 
 void DeInitProc(void)

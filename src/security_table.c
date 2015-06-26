@@ -171,6 +171,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 
 	if(GetSecurityTableEntry(daddr, &e))
 	{
+		printk(KERN_ERR "SUPERMAN: security_table - Updating an existing entry...\n");
 		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
 		{
 			DeleteSecurityTableEntry(daddr);
@@ -182,11 +183,13 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 	}
 	else
 	{
+		printk(KERN_ERR "SUPERMAN: security_table - Creating a new entry...\n");
 		e = kmalloc(sizeof(struct security_table_entry), GFP_ATOMIC);
 		if (e == NULL) {
 			printk(KERN_ERR "security_table: \"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
 			return false;
 		}
+		memset(e, 0, sizeof(struct security_table_entry));
 
 		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
 		{
@@ -218,20 +221,14 @@ int security_table_info_proc_show(struct seq_file *m, void *v)
 	read_lock_bh(&security_table_lock);
 
 	seq_printf(m, "# Total entries: %u\n", security_table_len);
-	seq_printf(m, "\t%-15s %-6s %-16s %-16s %-16s\n", "Addr", "Flag", "SK Len (bits)", "SKE Len (bits)", "SKP Len (bits)");
+	seq_printf(m, "%-15s %-6s %-16s %-16s %-16s\n", "Addr", "Flag", "SK Len (bits)", "SKE Len (bits)", "SKP Len (bits)");
 
-	
 	list_for_each(pos, &security_table_head) {
 		char addr[16];
 		struct security_table_entry *e = (struct security_table_entry *)pos;
 
-		sprintf(addr, "%d.%d.%d.%d ",
-			   0x0ff & e->daddr,
-			   0x0ff & (e->daddr >> 8),
-			   0x0ff & (e->daddr >> 16),
-			   0x0ff & (e->daddr >> 24));
-
-		seq_printf(m, "\t%-15s %-6d %-16d %-16d %-16d\n", addr, e->flag, (e->sk_len / 8), (e->ske_len / 8), (e->skp_len / 8));
+		sprintf(addr, "%u.%u.%u.%u", (0x0ff & e->daddr), (0x0ff & (e->daddr >> 8)), (0x0ff & (e->daddr >> 16)), (0x0ff & (e->daddr >> 24)));
+		seq_printf(m, "%-15s %-6d %-16d %-16d %-16d\n", addr, e->flag, (e->sk_len * 8), (e->ske_len * 8), (e->skp_len * 8));
 	}
 
 	read_unlock_bh(&security_table_lock);
@@ -246,9 +243,10 @@ void FlushSecurityTable(void)
 	write_unlock_bh(&security_table_lock);
 }
 
-void InitSecurityTable(void)
+bool InitSecurityTable(void)
 {
 	security_table_len = 0;
+	return true;
 }
 
 void DeInitSecurityTable(void)

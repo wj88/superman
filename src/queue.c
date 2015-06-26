@@ -35,18 +35,7 @@ static rwlock_t queue_lock = __RW_LOCK_UNLOCKED(queue_lock);
 static unsigned int queue_total;
 static LIST_HEAD(queue_list);
 
-void GetQueueInfo(int* length, int* maxLength)
-{
-	read_lock_bh(&queue_lock);
-
-    	*length = queue_total;
-	*maxLength = queue_maxlen;
-
-	read_unlock_bh(&queue_lock);
-}
-
 typedef int (*queue_cmpfn) (struct superman_packet_info*, unsigned long);
-
 
 static inline int __queue_enqueue_entry(struct superman_packet_info* spi)
 {
@@ -202,11 +191,66 @@ int SetVerdict(int verdict, __u32 daddr)
 	return 0;
 }
 
-
-
-void InitQueue(void)
+int queue_info_proc_show(struct seq_file *m, void *v)
 {
-	queue_total = 0;	
+	uint32_t countAddrs = 0;
+	uint32_t* addrs;
+	struct list_head *a;
+	int i;
+
+	read_lock_bh(&queue_lock);
+
+	addrs = kmalloc(sizeof(uint32_t) * queue_total, GFP_ATOMIC);
+
+	list_for_each(a, &queue_list) {
+		struct superman_packet_info *spi = (struct superman_packet_info*)a;
+		bool found = false;
+		
+		for(i = 0; i < countAddrs; i++)
+		{
+			if(spi->addr == addrs[i])
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if(!found)
+			addrs[countAddrs++] = spi->addr;
+	}
+
+
+ 	seq_printf(m, "%-20s %u\n%-20s %u\n\n", "Queue length:", queue_total, "Queue max. length:", queue_maxlen);
+
+	seq_printf(m, "%-20s %s\n", "Addr", "# Packets");
+
+	for(i = 0; i < countAddrs; i++)
+	{
+		uint32_t count = 0;
+		char addr[16];
+		sprintf(addr, "%u.%u.%u.%u", (0x0ff & addrs[i]), (0x0ff & (addrs[i] >> 8)), (0x0ff & (addrs[i] >> 16)), (0x0ff & (addrs[i] >> 24)));
+
+		list_for_each(a, &queue_list) {
+			struct superman_packet_info *spi = (struct superman_packet_info*)a;
+			if(addrs[i] == spi->addr)
+				count++;
+		}
+
+		seq_printf(m, "%-20s %u\n", addr, count);
+	}
+
+	kfree(addrs);
+
+	read_unlock_bh(&queue_lock);
+
+   
+	return 0;
+}
+
+bool InitQueue(void)
+{
+	queue_total = 0;
+	return true;	
 }
 
 void DeInitQueue(void)

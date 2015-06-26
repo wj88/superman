@@ -3,7 +3,7 @@
 
 #include "superman.h"
 
-#define AEAD_ALG_NAME "authenc(hmac(sha256), cbc(aes))"
+#define AEAD_ALG_NAME "authenc(hmac(sha256),cbc(aes))"
 #define SYM_KEY_LEN 32
 #define AUTH_LEN 4
 #define HMAC_LEN 4
@@ -32,7 +32,7 @@ bool MallocAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* s
 bool MallocAndDHAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* ske_len, unsigned char** ske, uint32_t* skp_len, unsigned char** skp);
 bool MallocAndGenerateNewKey(uint32_t* key_len, unsigned char** key);
 
-bool VerifyCertificate(unsigned char* cert_data, unsigned char* node_share, int node_share_len);
+bool VerifyCertificate(uint32_t cert_data_len, unsigned char* cert_data, unsigned char* node_share, int node_share_len);
 bool TestCertificate(unsigned char* cert_filename);
 bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_filename, unsigned char* node_dh_privatekey_filename);
 void DeInitSecurity(void);

@@ -423,7 +423,7 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 	// Deal with special case unencapsulated SUPERMAN packets which are not secured!
 	if(spi->shdr)
 	{
-		if(spi->shdr->payload_len != skb->data_len - (skb_transport_offset(skb) + sizeof(struct superman_header)))
+		if(spi->shdr->payload_len != skb->len - (skb_transport_offset(skb) + sizeof(struct superman_header)))
 		{
 			printk(KERN_INFO "SUPERMAN: Netfilter - Superman packet failed initial basic sanity check.\n");
 			spi->result = NF_DROP;
@@ -463,7 +463,7 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 		{
 			spi->result = NF_STOLEN;
 			EnqueuePacket(spi, &hook_prerouting_post_sk_response);
-			SendAuthenticatedSKRequest(spi->addr);
+			SendAuthenticatedSKRequestPacket(spi->addr);
 			return spi->result;
 		}
 	}
@@ -530,7 +530,7 @@ unsigned int hook_postrouting(	const struct nf_hook_ops *ops,
 /*
 The proc entry init and deinit functions deal with construction and destruction.
 */
-void InitNetFilter(void)
+bool InitNetFilter(void)
 {
 	nf_register_hook(&nf_hook_prerouting);
 /*
@@ -539,6 +539,8 @@ void InitNetFilter(void)
 	nf_register_hook(&nf_hook_localout);
 	nf_register_hook(&nf_hook_postrouting);
 */
+
+	return true;
 }
 
 void DeInitNetFilter(void)

@@ -1,5 +1,5 @@
-#ifndef __SUPERMAN__
-#define __SUPERMAN__
+#ifndef __SUPERMAN_INIT__
+#define __SUPERMAN_INIT__
 
 #ifdef __KERNEL__
 

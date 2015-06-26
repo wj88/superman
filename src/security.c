@@ -116,75 +116,54 @@ bool GetBroadcastKey(uint32_t* sk_len, unsigned char** sk)
 	return true;
 }
 
-/*
-unsigned int AddE2ESecurityDone(struct superman_packet_callback_arg* spca, int err, bool callback)
+
+unsigned int AddE2ESecurityDone(struct superman_packet_info* spi, unsigned int (*callback)(struct superman_packet_info*, bool), int err)
 {
-	struct superman_header* shdr;
-	struct sk_buff* skb;
-	void* payload;
-
-	// Grab the skb
-	skb = spca->skb;
-
+	bool result = false;
+	int blksize;
+	int aligned_payload_len;
+	
 	if(err == 0)
 	{
-		// Start address of the superman header;
-		shdr = (struct superman_header*) skb_transport_header(skb);
-
-		// Payload length (contents of Superman packet)
-		payload = ((unsigned char*) shdr) + sizeof(struct superman_header);
+		// Size of a single block
+		blksize = ALIGN(crypto_aead_blocksize(aead), 4);
 
 		// The bloated payload (payload rounded up to the nearest block size)
-		bloated_payload = ALIGN(shdr->payload_len + 2, ALIGN(crypto_aead_blocksize(aead), 4));
+		aligned_payload_len = ALIGN(spi->shdr->payload_len, blksize);
 
-		// Copy the auth data to the end of the payload so we can free up the remaining block parts.
-		memcpy(payload + shdr->payload_len, payload + ALIGN(shdr->payload_len + 2, ALIGN(crypto_aead_blocksize(aead), 4)), AUTH_LEN);
+		// Move the auth data from the end of the padding to the end of the payload.
+		skb_copy_bits(spi->skb, spi->skb->len - AUTH_LEN, (skb_transport_header(spi->skb) + sizeof(struct superman_header) + spi->shdr->payload_len), AUTH_LEN);
 
 		// Trim the excess off the end, leaving the encrypted payload and the auth data.
-		pskb_trim(skb, skb->len - (bloated_payload - shdr->payload_len));
+		pskb_trim(spi->skb, spi->skb->len - (aligned_payload_len - spi->shdr->payload_len));
 
-		// Inject the packet.
-		if(callback)
-			spca->okfn(skb, spca->arg);
-
-		// Free up allocated memory.
-		kfree(spca);
-
-		return NF_ACCEPT;
+		result = true;
 	}
-	else
-	{
-		// Free up allocated memory.
-		kfree(spca);
 
-		// Free up allocated memory.
-		if(callback)
-			kfree_skb(skb);
+	if(result && spi->result != NF_STOLEN)
+		spi->result = NF_ACCEPT;
+	else if(!result && spi->result != NF_STOLEN)
+		spi->result = NF_DROP;
 
-		return NF_DROP;
-	}
+	return callback(spi, result);
 }
 
 static void addE2ESecurityDone(struct crypto_async_request *base, int err)
 {
-	struct superman_packet_callback_arg *spca = base->data;
-	AddE2ESecurityDone(spca, err, true);
+	struct superman_packet_info* spi = base->data;
+	unsigned int (*callback)(struct superman_packet_info*, bool) = spi->arg;
+	spi->arg = NULL;
+	AddE2ESecurityDone(spi, callback, err);
 }
 
-unsigned int AddE2ESecurity(struct sk_buff* skb, int (*okfn)(struct sk_buff*, void*), void* arg, bool force_callback, bool force_broadcast)
+unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*callback)(struct superman_packet_info*, bool))
 {
-	struct security_table_entry* entry;
-	int addr_type;
 	int err;
 	int i;
-	void* payload;
-	__be16 payload_len;
-	int alen;
 	int blksize;
-	int clen;
-	int plen;
-	int tlen;
-	int assoclen;
+	int aligned_payload_len;
+	int padding_len;
+	int assoc_len;
 	int nfrags;
 	u8 *iv;
 	__be32 *seqhi;
@@ -193,113 +172,118 @@ unsigned int AddE2ESecurity(struct sk_buff* skb, int (*okfn)(struct sk_buff*, vo
 	uint8_t* tail;
 	struct scatterlist *sg;
 	struct scatterlist *asg;
-	void* nhdr;
-	struct superman_header* shdr;
-	struct aead_givcrypt_request *req;
-	struct superman_packet_callback_arg* spca;
-
-	// Start address of the network and superman headers;
-	nhdr = skb_network_header(skb);
-	shdr = (struct superman_header*) skb_transport_header(skb);
+	int sglists;
+	struct aead_request *req;
 
 	// Determine which key we should be using.
-	addr_type = ip_chk_addr(ip_hdr(skb)->daddr);
-	if(addr_type == IS_MYADDR || addr_type == IS_LOOPBACK)
+
+	// If we don't need to secure this packet, accept it.
+	if(!spi->secure_packet)
+	{
+		spi->result = NF_ACCEPT;
 		return NF_ACCEPT;
-	else if(addr_type == IS_BROADCAST || addr_type == IS_MULTICAST || force_broadcast)
-	{
-		if((broadcast_key_len == 0) || !(broadcast_key) || (crypto_aead_setkey(aead, broadcast_key, broadcast_key_len) != 0))
-			return NF_DROP;
-	}
-	else
-	{
-		if(!GetSecurityTableEntry(ip_hdr(skb)->daddr, &entry))
-		{
-			// Enqueue the packet
-			// Send an SK Request
-			return NF_STOLEN;
-		}	
-		else if(crypto_aead_setkey(aead, entry->ske, entry->ske_len) != 0)
-			return NF_DROP;
 	}
 
-	// Payload length (contents of Superman packet)
-	payload = ((void*) shdr) + sizeof(struct superman_header);
-	payload_len = shdr->payload_len;
+	// If we don't have the security details.
+	if(!spi->has_security_details)
+	{
+		spi->result = NF_DROP;
+		return NF_DROP;
+	}
 
-	// Size of the auth data
-	alen = AUTH_LEN;
+	// We have a key to use, load it into the crypto process.
+	if(crypto_aead_setkey(aead, spi->security_details->ske, spi->security_details->ske_len) != 0)
+	{
+		spi->result = NF_DROP;
+		return NF_DROP;
+	}
 
 	// Size of a single block
 	blksize = ALIGN(crypto_aead_blocksize(aead), 4);
 
-	// clen = contents length?
 	// The bloated payload (payload rounded up to the nearest block size)
-	clen = ALIGN(payload_len + 2, blksize);
+	aligned_payload_len = ALIGN(spi->shdr->payload_len, blksize);
 
 	// Size of the padding added to make contents up to block size
-	plen = clen - payload_len;
-
-	// Total size of contents with auth bytes added
-	tlen = clen + alen;
+	padding_len = aligned_payload_len - spi->shdr->payload_len;
 
 	// Size of the associated data
-	assoclen = sizeof(struct iphdr) + sizeof(struct superman_header);
+	assoc_len = sizeof(struct iphdr) + sizeof(struct superman_header);
 
-	// Grab the scatterlist length whilst ensuring we have space for the currently not added data.
-	nfrags = skb_cow_data(skb, padding_len + AUTH_LEN, &trailer);
+	// Grab the scatterlist length whilst ensuring we have space for the currently not added data padding data.
+	nfrags = skb_cow_data(spi->skb, padding_len + AUTH_LEN, &trailer);
 	if(nfrags < 0)
-		return false;
+	{
+		spi->result = NF_DROP;
+		return NF_DROP;
+	}
 
-	// Move the alen to just after the last block
-	memcpy(payload + clen, payload + shdr->payload_len, alen);
+	// Reserve the space in the skb for our padding to fill the block size.
+	tail = pskb_put(spi->skb, trailer, padding_len + AUTH_LEN);
+
+	// Make sure the buffer is linear or direct manipulation will likely fail.
+	skb_linearize(spi->skb);
 
 	// Fill the padding with known data.
-	tail = skb_tail_pointer(trailer);
-	for (i = 0; i < plen - 2 - alen; i++)
+	for (i = 0; i < padding_len; i++)
 		tail[i] = i + 1;
-	tail[plen - 2] = plen - 2;
-	tail[plen - 1] = *skb_mac_header(skb);
+	// Clear the auth bytes
+	for (i = padding_len; i < padding_len + AUTH_LEN; i++)
+		tail[i] = 0;
 
-	// Reserve the space in the skb for our encrypted data to fill the block size.
-	pskb_put(skb, trailer, clen - payload_len + alen);
+	// No longer checksumed
+	spi->skb->ip_summed = CHECKSUM_NONE;
 
 	// We need some temporary memory to store stuff. Allocate the memory then divide it up.
 	sglists = 1;
 	seqhilen = 0;
-	spca = alloc_tmp_e2e(skb, aead, nfrags + sglists, seqhilen, okfn, arg);
-	seqhi = tmp_seqhi(spca->tmp);
-	iv = tmp_iv(aead, spca->tmp, seqhilen);
-	req = tmp_givreq(aead, iv);
-	asg = givreq_sg(aead, req);
-	sg = asg + sglists;
 
-	// No longer checksumed
-	skb->ip_summed = CHECKSUM_NONE;
+	// Allocate some memory attached to spi->tmp to host the scatter list.
+	if(!alloc_tmp_e2e(spi, aead, nfrags + sglists, seqhilen))
+	{
+		spi->result = NF_DROP;
+		return NF_DROP;
+	}
+	seqhi = tmp_seqhi(spi->tmp);
+	iv = tmp_iv(aead, spi->tmp, seqhilen);
+	req = tmp_req(aead, iv);
+	asg = req_sg(aead, req);
+	sg = asg + sglists;
 
 	// Initialise the contents scatterlist with the number of fragments with have in our skb.
 	sg_init_table(sg, nfrags);
 
 	// Populate the contents scatterlist from the skb, offset from where the real payload data.
-	skb_to_sgvec(skb, sg, skb_transport_offset(skb) + sizeof(struct superman_header), clen + alen);
+	skb_to_sgvec(spi->skb, sg, assoc_len, aligned_payload_len + AUTH_LEN);
 
 	// Initialise the associated data scatterlist with the header stuff (all of the headers).
-	sg_init_one(asg, nhdr, payload - nhdr);
+	sg_init_one(asg, skb_network_header(spi->skb), assoc_len);
 
 	// Setup aead
-	aead_givcrypt_set_callback(req, 0, addE2ESecurityDone, spca);
-	aead_givcrypt_set_crypt(req, sg, sg, clen, iv);
-	aead_givcrypt_set_assoc(req, asg, assoclen);
-	aead_givcrypt_set_giv(req, payload, 0);
+	aead_request_set_callback(req, 0, addE2ESecurityDone, spi);
+	aead_request_set_crypt(req, sg, sg, aligned_payload_len, iv);
+	aead_request_set_assoc(req, asg, assoc_len);
 
-	err = crypto_aead_decrypt(req);
+	// Pop the callback into the spi.
+	spi->arg = callback;
+
+	// Attempt to perform the decrypt process.
+	err = crypto_aead_encrypt(req);
+
+	// If we're told it's in progress, it is being performed asyncronously... steal the packet.
 	if (err == -EINPROGRESS)
-		return NF_STOLEN;
+	{
+		spi->result = NF_STOLEN;
+	}	
+	// Crypto finished immediately, go straight to the end. 
+	else
+	{
+		spi->arg = NULL;
+		spi->result = AddE2ESecurityDone(spi, callback, err);
+	}
 
-	// Process the result and free up any allocated memory.
-	return AddE2ESecurityDone(spca, err, force_callback);
+	return spi->result;
 }
-*/
 
 unsigned int RemoveE2ESecurityDone(struct superman_packet_info* spi, unsigned int (*callback)(struct superman_packet_info*, bool), int err)
 {
@@ -773,6 +757,7 @@ bool InitSecurity(void)
 	aead = crypto_alloc_aead(AEAD_ALG_NAME, 0, 0);
 	if(IS_ERR(aead))
 	{
+		aead = NULL;
 		printk(KERN_ERR "SUPERMAN: Security - Failed to alloc aead.\n"); 
 		return false;
 	}
@@ -900,20 +885,21 @@ bool MallocAndGenerateNewKey(uint32_t* key_len, unsigned char** key)
 
 bool LoadFile(unsigned char* filename, uint32_t* data_len, unsigned char** data)
 {
+	printf("Security: Loading %s...\n", filename);
 	int fd;
 	struct stat file_info;
 
 	if (access(filename, F_OK) != 0)
 	{
 		if (errno == ENOENT) 
-			printf("Security: %s does not exist.\n", filename);
+			printf("Security: \tFile does not exist.\n");
 		else if (errno == EACCES) 
-			printf("Security: %s is not accessible.\n", filename);
+			printf("Security: \tFile is not accessible.\n");
 		return NULL;
 	}
 	if (access(filename, R_OK) != 0)
 	{
-		printf("Security: %s is not readable (access denied).\n", filename);
+		printf("Security: \tFile is not readable (access denied).\n");
 		return NULL;
 	}
 
@@ -921,26 +907,41 @@ bool LoadFile(unsigned char* filename, uint32_t* data_len, unsigned char** data)
 	fstat(fd, &file_info);
 	*data_len = file_info.st_size;
 	*data = (unsigned char*) malloc(*data_len);
-	read(fd, data, data_len);
+	int bytes_read;
+	bytes_read = read(fd, *data, *data_len);
+	if(bytes_read != *data_len)
+		printf("Security: \tBytes read isn't file length.\n");
 	close(fd);
+	printf("Security: \tloaded %u bytes (file size %u bytes).\n", bytes_read, *data_len);
 
 	return data;
 }
 
-bool LoadCertificate(unsigned char* cert_data, BIO** certbio, X509** cert)
+bool LoadCertificate(uint32_t cert_data_len, unsigned char* cert_data, BIO** certbio, X509** cert)
 {
+	printf("Security: \tLoading certificate...\n");
+
 	*certbio = NULL;
 	*cert = NULL;
 
 	// Load the certificate from memory (PEM)
         // and cacert chain from file (PEM)
-	*certbio = BIO_new_mem_buf((void*)cert_data, -1);
-	if (!(*cert = PEM_read_bio_X509(*certbio, NULL, 0, NULL))) {
-		BIO_printf(outbio, "Security: Error loading cert into memory\n");
+	printf("Security: \tCalling BIO_new_mem...\n");
+	*certbio = BIO_new_mem_buf((void*)cert_data, cert_data_len);
+	if(*certbio == NULL) {
+		printf("Security: Error allocating BIO memory buffer.\n");
+		return false;
+	}
+
+	printf("Security: \tCalling PEM_read_bio_x509...\n");
+	*cert = PEM_read_bio_X509(*certbio, NULL, 0, NULL);	
+	if(*cert == NULL) {
+		printf("Security: Error loading cert into memory\n");
 		BIO_free_all(*certbio);
 		return false;
 	}
 
+	printf("Security: \tdone.\n");
 	return true;
 }
 
@@ -984,13 +985,13 @@ bool CheckKey(EVP_PKEY* pkey)
 	}
 }
 
-BIGNUM* GetNodeShare(unsigned char* cert_data)
+BIGNUM* GetNodeShare(uint32_t cert_data_len, unsigned char* cert_data)
 {
 	// Load our public key from the certificate
 	printf("Security: Extracting DH public key from certificate...\n");
 	BIO*		certbio		= NULL;
 	X509*		cert		= NULL;
-	if(!LoadCertificate(cert_data, &certbio, &cert))
+	if(!LoadCertificate(cert_data_len, cert_data, &certbio, &cert))
 	{
 		return NULL;
 	}
@@ -1021,7 +1022,7 @@ BIGNUM* GetNodeShare(unsigned char* cert_data)
 	return n;
 }
 
-bool VerifyCertificate(unsigned char* cert_data, unsigned char* node_share, int node_share_len)
+bool VerifyCertificate(uint32_t cert_data_len, unsigned char* cert_data, unsigned char* node_share, int node_share_len)
 {
 	//X509          	*error_cert	= NULL;
 	BIO             *certbio	= NULL;
@@ -1033,7 +1034,7 @@ bool VerifyCertificate(unsigned char* cert_data, unsigned char* node_share, int 
 
 	printf("Security: Verifying certificate...\n");
 	
-	if(!LoadCertificate(cert_data, &certbio, &cert))
+	if(!LoadCertificate(cert_data_len, cert_data, &certbio, &cert))
 		return false;
 
 	// Create the context structure for the validation operation.
@@ -1077,7 +1078,7 @@ bool VerifyCertificate(unsigned char* cert_data, unsigned char* node_share, int 
 		if(node_share != NULL)
 		{
 			BIGNUM* shareProvided = BN_mpi2bn(node_share, node_share_len, NULL);
-			BIGNUM* shareDerived = GetNodeShare(cert_data);
+			BIGNUM* shareDerived = GetNodeShare(cert_data_len, cert_data);
 			ret = (BN_cmp(node_privatekey_dh->pub_key, node_publickey));
 			BN_free(shareProvided);
 			BN_free(shareDerived);
@@ -1111,10 +1112,13 @@ bool MallocAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* s
 	*skp_len = SYM_KEY_LEN;
 	*skp = NULL;
 
+	printf("Security: \tAllocating %u bytes for SKE and SKP...\n", SYM_KEY_LEN);
 	if(	(!(*ske = (unsigned char*) malloc(*ske_len))) ||
 		(!(*skp = (unsigned char*) malloc(*skp_len)))
 	)
 	{
+		printf("Security: \tFailed to allocate the memory.\n");
+
 		*ske_len = 0;
 		if(*ske) {
 			free(*ske);
@@ -1129,6 +1133,8 @@ bool MallocAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* s
 	}
 
 	// https://www.openssl.org/docs/crypto/PKCS5_PBKDF2_HMAC.html
+
+	printf("Security: \tUndertaking KDF...\n");
 
 	PKCS5_PBKDF2_HMAC_SHA1(sk, sk_len, NULL, 0, 1000, *ske_len, *ske);
 	printf("Security: SKE generated:\n");
@@ -1148,36 +1154,45 @@ bool MallocAndDHAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32
 	BIGNUM* sk_bn = NULL;
 	bool result;
 
-	if(
-		(!(sk_bn = BN_mpi2bn(sk, sk_len, NULL))) ||
-		(!(cmb = (unsigned char*) malloc(cmb_len))) ||
-		(0 > (cmb_len = DH_compute_key(cmb, sk_bn, node_privatekey_dh)))
-	)
+	printf("Security: \tConstructing a BIGNUM of the provided SK...\n");
+	sk_bn = BN_bin2bn(sk, sk_len, NULL);
+	if(sk_bn == NULL)
 	{
-		if(sk_bn) {
-			BN_free(sk_bn);
-			sk_bn = NULL;
-		}
-		cmb_len = 0;
-		if(cmb) {
-			free(cmb);
-			cmb = NULL;
-		}
+		printf("Security: \tFailed to construct the BIGNUM.\n\t\tError: \t%s\n", ERR_error_string(ERR_get_error(), NULL));
+		return false;
+	}
+
+	printf("Security: \tAllocating %u bytes of memory for the computed shared key...\n", cmb_len);
+	cmb = (unsigned char*) malloc(cmb_len);
+	if(cmb == NULL)
+	{
+		printf("Security: \tFailed to allocate the memory.\n");
+		BN_free(sk_bn);
+		return false;
+	}
+
+	printf("Security: \tComputing the DH shared key...\n");
+	cmb_len = DH_compute_key(cmb, sk_bn, node_privatekey_dh);
+	if(0 > cmb_len)
+	{
+		printf("Security: \tFailed to computer the shared key.\n");
+		BN_free(sk_bn);
+		free(cmb);
 		return false;
 	}
 
 	BN_free(sk_bn);
 	
-	result = MallocAndDHAndGenerateSharedkeys(cmb_len, cmb, ske_len, ske, skp_len, skp);
+	result = MallocAndGenerateSharedkeys(cmb_len, cmb, ske_len, ske, skp_len, skp);
 
 	free(cmb);
 
 	return result;
 }
 
-unsigned char* GenerateSharedSecret(unsigned char* cert_data)
+unsigned char* GenerateSharedSecret(uint32_t cert_data_len, unsigned char* cert_data)
 {
-	BIGNUM* pubkey = GetNodeShare(cert_data);
+	BIGNUM* pubkey = GetNodeShare(cert_data_len, cert_data);
 	if(!pubkey) return NULL;
 
 	unsigned char *secret;
@@ -1227,9 +1242,9 @@ bool TestCertificate(unsigned char* cert_filename)
 	if(LoadFile(cert_filename, &cert_data_len, &cert_data))
 	{
 		// Can we verify the certificate?
-		if(VerifyCertificate(cert_data, NULL, 0))
+		if(VerifyCertificate(cert_data_len, cert_data, NULL, 0))
 		{
-			unsigned char* sharedSecret = GenerateSharedSecret(cert_data);
+			unsigned char* sharedSecret = GenerateSharedSecret(cert_data_len, cert_data);
 
 			OPENSSL_free(sharedSecret);
 		}
@@ -1262,7 +1277,7 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 	printf("Security: Loading the CA public certificate...\n");
 
 	// Load the up root CA's certificate.
-	if(!LoadCertificate(ca_cert_data, &ca_certbio, &ca_cert))
+	if(!LoadCertificate(ca_cert_data_len, ca_cert_data, &ca_certbio, &ca_cert))
 	{
 		DeInitSecurity();
 		return false;
@@ -1285,7 +1300,7 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 	}
 
 	printf("Security: Verifying our node certificate...\n");
-	if(!VerifyCertificate(node_cert_data, NULL, 0))
+	if(!VerifyCertificate(node_cert_data_len, node_cert_data, NULL, 0))
 	{
 		BIO_printf(outbio, "Security: Error verifying certificate\n");
 		DeInitSecurity();
@@ -1316,7 +1331,7 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 	}
 
 	// Load our public key from the certificate
-	if(!(node_publickey = GetNodeShare(node_cert_data)))
+	if(!(node_publickey = GetNodeShare(node_cert_data_len, node_cert_data)))
 	{
 		DeInitSecurity();
 		return false;
@@ -1335,7 +1350,7 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 	}
 
 	//printf("Security: Testing shared secret generator...\n");
-	//unsigned char* secret = GenerateSharedSecret(node_cert_data);
+	//unsigned char* secret = GenerateSharedSecret(node_cert_data_len, node_cert_data);
 	//OPENSSL_free(secret);
 
 	//printf("Security: Extracting DH public key...\n");

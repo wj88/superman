@@ -29,7 +29,7 @@ bool is_superman_packet(struct sk_buff* skb);
 struct superman_header* get_superman_header(struct sk_buff *skb);
 
 
-void InitNetFilter(void);
+bool InitNetFilter(void);
 void DeInitNetFilter(void);
 
 #endif
