@@ -36,7 +36,7 @@ static inline void __security_table_flush(void)
 static inline bool __security_table_add(struct security_table_entry *e)
 {
 	if (security_table_len >= SECURITY_TABLE_MAX_LEN) {
-		printk(KERN_WARNING "SUPERMAN: security_table - Max list len reached (%d items).\n", SECURITY_TABLE_MAX_LEN);
+		printk(KERN_WARNING "SUPERMAN: security_table - \tMax list len reached (%d items).\n", SECURITY_TABLE_MAX_LEN);
 		return false;
 	}
 
@@ -171,11 +171,11 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 
 	if(GetSecurityTableEntry(daddr, &e))
 	{
-		printk(KERN_ERR "SUPERMAN: security_table - Updating an existing entry...\n");
+		printk(KERN_ERR "SUPERMAN: security_table - \t\tUpdating an existing entry...\n");
 		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
 		{
 			DeleteSecurityTableEntry(daddr);
-			printk(KERN_ERR "SUPERMAN: security_table - \"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
+			printk(KERN_ERR "SUPERMAN: security_table - \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
 			return false;
 		}
 		else
@@ -183,10 +183,10 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 	}
 	else
 	{
-		printk(KERN_ERR "SUPERMAN: security_table - Creating a new entry...\n");
+		printk(KERN_ERR "SUPERMAN: security_table - \t\tCreating a new entry...\n");
 		e = kmalloc(sizeof(struct security_table_entry), GFP_ATOMIC);
 		if (e == NULL) {
-			printk(KERN_ERR "security_table: \"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
+			printk(KERN_ERR "security_table: \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
 			return false;
 		}
 		memset(e, 0, sizeof(struct security_table_entry));
@@ -194,7 +194,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
 		{
 			DeleteSecurityTableEntry(daddr);
-			printk(KERN_ERR "SUPERMAN: security_table - \"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
+			printk(KERN_ERR "SUPERMAN: security_table - \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
 			return false;
 		}
 

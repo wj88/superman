@@ -243,25 +243,32 @@ inline bool is_valid_ip_packet(struct sk_buff* skb)
 }
 
 
-unsigned int process_certificate_excahnge_packet(struct superman_packet_info* spi)
+unsigned int process_certificate_exchange_packet(struct superman_packet_info* spi)
 {
 	// NOTE: We need to free our spi.
 
-
-	__be16 certificate_len;
+	uint32_t certificate_len;
 	unsigned char* certificate;
+
+	printk(KERN_INFO "SUPERMAN: Netfilter - \t\tProcessing the certificate exchange...\n");
 
 	// Carefully, with plenty of bounds checking, extract the contents of the payload in the component parts.
 	if(spi->shdr->payload_len >= sizeof(__be16))
 	{
-		certificate_len = *((__be16*) spi->payload);
+		certificate_len = ntohs(*((__be16*) spi->payload));
+		printk(KERN_INFO "SUPERMAN: Netfilter - \t\tCertificate length: %u\n", certificate_len);
 
 		if(spi->shdr->payload_len >= sizeof(__be16) + certificate_len)
 		{
 			certificate = (unsigned char*)(spi->payload + sizeof(__be16));
-			ReceivedSupermanCertificateExchange(spi->addr, (uint32_t)ntohs(certificate_len), certificate);
+			ReceivedSupermanCertificateExchange(spi->addr, certificate_len, certificate);
 		}
+		else
+			printk(KERN_INFO "SUPERMAN: Netfilter - \t\t\tPayload size mismatch (certificate).\n");
 	}
+	else
+		printk(KERN_INFO "SUPERMAN: Netfilter - \t\t\tPayload size mismatch (certificate_len).\n");
+		
 
 	spi->use_callback = false;
 	if(spi->result != NF_STOLEN) spi->result = NF_DROP;
@@ -270,36 +277,48 @@ unsigned int process_certificate_excahnge_packet(struct superman_packet_info* sp
 	return FreeSupermanPacketInfo(spi);
 }
 
-unsigned int process_certificate_excahnge_with_broadcast_key_packet(struct superman_packet_info* spi)
+unsigned int process_certificate_exchange_with_broadcast_key_packet(struct superman_packet_info* spi)
 {
 	// NOTE: We need to free our spi.
 
-	__be16 certificate_len;
+	uint32_t certificate_len;
 	unsigned char* certificate;
-	__be16 broadcast_key_len;
+	uint32_t broadcast_key_len;
 	unsigned char* broadcast_key;
+
+	printk(KERN_INFO "SUPERMAN: Netfilter - \t\tProcessing the certificate exchange with broadcast key...\n");
 
 	// Carefully, with plenty of bounds checking, extract the contents of the payload in the component parts.
 	if(spi->shdr->payload_len >= sizeof(__be16))
 	{
-		certificate_len = *((__be16*) spi->payload);
-		
+		certificate_len = ntohs(*((__be16*) spi->payload));
+		printk(KERN_INFO "SUPERMAN: Netfilter - \t\tCertificate length: %u\n", certificate_len);
+
 		if(spi->shdr->payload_len >= sizeof(__be16) + certificate_len)
 		{
 			certificate = (unsigned char*)(spi->payload + sizeof(__be16));
 
 			if(spi->shdr->payload_len >= sizeof(__be16) + certificate_len + sizeof(__be16))
 			{
-				broadcast_key_len = *((__be16*) (spi->payload + sizeof(__be16) + certificate_len));
+				broadcast_key_len = ntohs(*((__be16*) (spi->payload + sizeof(__be16) + certificate_len)));
+				printk(KERN_INFO "SUPERMAN: Netfilter - \t\tBroadcast Key length: %u\n", broadcast_key_len);
 
 				if(spi->shdr->payload_len >= sizeof(__be16) + certificate_len + sizeof(__be16) + broadcast_key_len)
 				{
 					broadcast_key = (unsigned char*)(spi->payload + sizeof(__be16) + certificate_len + sizeof(__be16));
-					ReceivedSupermanCertificateExchangeWithBroadcastKey(spi->addr, (uint32_t)ntohs(certificate_len), certificate, (uint32_t)ntohs(broadcast_key_len), broadcast_key);
+					ReceivedSupermanCertificateExchangeWithBroadcastKey(spi->addr, certificate_len, certificate, broadcast_key_len, broadcast_key);
 				}
+				else
+					printk(KERN_INFO "SUPERMAN: Netfilter - \t\t\tPayload size mismatch (broadcast key).\n");
 			}
+			else
+				printk(KERN_INFO "SUPERMAN: Netfilter - \t\t\tPayload size mismatch (broadcast_key_len).\n");
 		}
+		else
+			printk(KERN_INFO "SUPERMAN: Netfilter - \t\t\tPayload size mismatch (certificate).\n");
 	}
+	else
+		printk(KERN_INFO "SUPERMAN: Netfilter - \t\t\tPayload size mismatch (certificate_len).\n");
 
 	if(spi->result != NF_STOLEN) spi->result = NF_DROP;
 
@@ -320,11 +339,11 @@ unsigned int hook_prerouting_removed_e2e(struct superman_packet_info* spi, bool 
 			switch(spi->shdr->type)
 			{
 				case SUPERMAN_CERTIFICATE_EXCHANGE_TYPE:				// It's a Certificate Exchange
-					return process_certificate_excahnge_packet(spi);
+					return process_certificate_exchange_packet(spi);
 					break;
 
 				case SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE:		// It's a Certificate Exchange With Broadcast Key
-					return process_certificate_excahnge_with_broadcast_key_packet(spi);
+					return process_certificate_exchange_with_broadcast_key_packet(spi);
 					break;
 			}
 		}
@@ -351,11 +370,13 @@ unsigned int hook_prerouting_removed_p2p(struct superman_packet_info* spi, bool 
 			{
 				case SUPERMAN_CERTIFICATE_EXCHANGE_TYPE:				// It's a Certificate Exchange
 					spi->security_flag = 2;
+					//return process_certificate_exchange_packet(spi);
 					return RemoveE2ESecurity(spi, &hook_prerouting_removed_e2e);
 					break;
 
 				case SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE:		// It's a Certificate Exchange With Broadcast Key
 					spi->security_flag = 2;
+					//return process_certificate_exchange_with_broadcast_key_packet(spi);
 					return RemoveE2ESecurity(spi, &hook_prerouting_removed_e2e);
 					break;
 			}
@@ -415,17 +436,17 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 	if(!is_valid_ip_packet(skb))
 		return NF_ACCEPT;
 
-	printk(KERN_INFO "SUPERMAN: Netfilter - Packet Received\n");
-
 	// Construct a new SPI to handle this packet.
-	spi = MallocSupermanPacketInfo(ops, skb, in, out, okfn);
+	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
+
+	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \tPacket Received from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 	// Deal with special case unencapsulated SUPERMAN packets which are not secured!
 	if(spi->shdr)
 	{
-		if(spi->shdr->payload_len != skb->len - (skb_transport_offset(skb) + sizeof(struct superman_header)))
+		if(spi->shdr->payload_len > skb->len - (skb_transport_offset(skb) + sizeof(struct superman_header)))
 		{
-			printk(KERN_INFO "SUPERMAN: Netfilter - Superman packet failed initial basic sanity check.\n");
+			printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tSuperman packet failed initial basic sanity check.\n");
 			spi->result = NF_DROP;
 			return FreeSupermanPacketInfo(spi);
 		}
@@ -433,14 +454,14 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 		switch(spi->shdr->type)
 		{
 			case SUPERMAN_DISCOVERY_REQUEST_TYPE:			// It's a Discovery Request
-				printk(KERN_INFO "SUPERMAN: Netfilter - Discovery Request Packet.\n");
+				printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tDiscovery Request Packet.\n");
 				ReceivedSupermanDiscoveryRequest(spi->addr, spi->shdr->payload_len, spi->payload, spi->shdr->timestamp, spi->skb->skb_iif);
 				spi->result = NF_DROP;
 				return FreeSupermanPacketInfo(spi);
 				break;
 
 			case SUPERMAN_CERTIFICATE_REQUEST_TYPE:			// It's a Certificate Request
-				printk(KERN_INFO "SUPERMAN: Netfilter - Certificate Request Packet.\n");
+				printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tCertificate Request Packet.\n");
 				ReceivedSupermanCertificateRequest(spi->addr, spi->shdr->payload_len, spi->payload, spi->shdr->timestamp, spi->skb->skb_iif);
 				spi->result = NF_DROP;
 				return FreeSupermanPacketInfo(spi);
@@ -455,12 +476,16 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 		// If it the broadcast key we don't have, ditch the packet.
 		if(spi->use_broadcast_key)
 		{
+			printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tBroadcast packet but we don't have a broadcast key.\n");
+
 			spi->result = NF_DROP;
 			return FreeSupermanPacketInfo(spi);
 		}
 		// Otherwise queue the packet and send an SK request.
 		else
 		{
+			printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tWe don't have the the security details. Queuing packet and sending an SK Request.\n");
+
 			spi->result = NF_STOLEN;
 			EnqueuePacket(spi, &hook_prerouting_post_sk_response);
 			SendAuthenticatedSKRequestPacket(spi->addr);
@@ -470,6 +495,7 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 
 	// For all other packet types, they must pass the hmac check!
 	// NOTE: The callback becomes responsible for clearing up the SPI.
+	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tRemoving P2P security...\n");
 	return RemoveP2PSecurity(spi, &hook_prerouting_removed_p2p);
 }
 

@@ -3,9 +3,11 @@
 
 #include "superman.h"
 
-#define AEAD_ALG_NAME "authenc(hmac(sha256),cbc(aes))"
+// #define AEAD_ALG_NAME "authenc(hmac(sha256),cbc(aes))"
+#define AEAD_ALG_NAME "gcm(aes)"
+#define HMAC_ALG_NAME "hmac(sha256)"
 #define SYM_KEY_LEN 32
-#define AUTH_LEN 4
+#define MAC_LEN 4
 #define HMAC_LEN 4
 
 #ifdef __KERNEL__

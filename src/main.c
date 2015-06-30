@@ -198,6 +198,8 @@ void InvokeSendDiscoveryRequest()
 
 void Run()
 {
+	bool discoverySent = false;
+
 	// Capture the time now.
 	time(&last_discovery_request);
 
@@ -210,17 +212,22 @@ void Run()
 		if(difftime(timeNow, last_discovery_request) >= 5.0)
 		{
 			time(&last_discovery_request);
-			InvokeSendDiscoveryRequest();
+
+			if(!discoverySent)
+			{
+				discoverySent = true;
+				InvokeSendDiscoveryRequest();
+			}
 		}
 
 		// Do some task here...
-		printf("Main: Checking for netlink messages...\n");
+		//printf("Main: Checking for netlink messages...\n");
 		requires_sleep = !CheckForMessages();
            
 		if(requires_sleep)
 		{
-			printf("Main: ... going back to sleep.\n");
-			sleep(1); // wait 1 seconds
+			//printf("Main: ... going back to sleep.\n");
+			usleep(250000); // wait in microseconds (250000 usecs = 0.25 secs, 1000000 usecs = 1 sec)
 		}
         }
 }

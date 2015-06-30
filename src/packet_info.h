@@ -61,7 +61,7 @@ struct superman_packet_info
 	void* tmp;
 };
 
-struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
+struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
 unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi);
 
 #endif

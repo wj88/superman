@@ -45,13 +45,13 @@ static inline int if_info_from_net_device(struct in_addr *addr, struct in_addr *
 	return found;
 }
 
-struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
 	struct superman_packet_info* spi;
 	spi = kmalloc(sizeof(struct superman_packet_info), GFP_ATOMIC);
 
 	// Information provided by the hook function where the SPI originated.
-	spi->hooknum = ops->hooknum;
+	spi->hooknum = hooknum;
 	spi->skb = skb;
 	spi->in = in;
 	spi->out = out;
@@ -75,12 +75,14 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	memset(&spi->bcaddr, 0, sizeof(struct in_addr));
 	if(spi->hooknum == NF_INET_PRE_ROUTING || spi->hooknum == NF_INET_LOCAL_IN)
 	{
-		if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->in);
+		if(spi->in != NULL)
+			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->in);
 		spi->addr = spi->iph->saddr;
 	}
 	else if(spi->hooknum == NF_INET_POST_ROUTING || spi->hooknum == NF_INET_LOCAL_OUT || spi->hooknum == NF_INET_FORWARD)
 	{
-		if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->out);
+		if(spi->out != NULL)
+			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->out);
 		spi->addr = spi->iph->daddr;
 	}
 	else
@@ -103,10 +105,16 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	{
 		case IS_MYADDR:
 		case IS_LOOPBACK:
+			printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is from me or is a loopback packet.\n");
+
+			// TODO: The next line is very temporary
+			spi->secure_packet = true;
+
 			spi->secure_packet = false;
 			break;
 		case IS_MULTICAST:
 		case IS_BROADCAST:
+			printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is a broadcast or multicast packet.\n");
 			spi->secure_packet = true;
 			spi->use_broadcast_key = true;
 			break;
@@ -142,7 +150,8 @@ unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi)
 	unsigned int nf_result = spi->result;
 	if(spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)
 	{
-		spi->okfn(spi->skb);
+		if(spi->okfn != NULL)
+			spi->okfn(spi->skb);
 	}
 	else if(!spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)
 	{
