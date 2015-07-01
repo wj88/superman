@@ -4,6 +4,7 @@
 #include "init.h"
 #include "security.h"
 #include "security_table.h"
+#include "interfaces_table.h"
 #include "queue.h"
 #include "proc.h"
 #include "netlink.h"
@@ -22,18 +23,22 @@ int Init(void)
 		{
 			if(InitSecurityTable())
 			{
-				if(InitSecurity())
+				if(InitInterfacesTable())
 				{
-					if(InitNetlink())
+					if(InitSecurity())
 					{
-						if(InitNetFilter())
+						if(InitNetlink())
 						{
-							printk(KERN_INFO "SUPERMAN: module loaded successfully.\n");
-							return 0;
+							if(InitNetFilter())
+							{
+								printk(KERN_INFO "SUPERMAN: module loaded successfully.\n");
+								return 0;
+							}
+							DeInitNetlink();
 						}
-						DeInitNetlink();
+						DeInitSecurity();
 					}
-					DeInitSecurity();
+					DeInitInterfacesTable();
 				}
 				DeInitSecurityTable();
 			}
@@ -50,6 +55,7 @@ void DeInit(void)
 	DeInitNetFilter();
 	DeInitNetlink();
 	DeInitSecurity();
+	DeInitInterfacesTable();
 	DeInitSecurityTable();
 	DeInitQueue();
 	DeInitProc();

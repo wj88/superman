@@ -4,9 +4,18 @@
 
 #ifdef __KERNEL__
 
+#include "interfaces_table.h"
 #include "security_table.h"
 #include "packet.h"
 #include "security.h"
+
+void UpdateSupermanInterfaceTableEntry(uint32_t interface_name_len, unsigned char* interface_name, bool monitor_flag)
+{
+	if(monitor_flag)
+		AddInterfacesTableEntryByName(interface_name);
+	else
+		RemoveInterfacesTableEntryByName(interface_name);
+}
 
 void UpdateSupermanSecurityTableEntry(uint32_t address, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
 {

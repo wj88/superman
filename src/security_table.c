@@ -75,7 +75,7 @@ static inline bool __security_table_del(struct security_table_entry *e)
 	return true;
 }
 
-bool DeleteSecurityTableEntry(uint32_t daddr)
+bool RemoveSecurityTableEntry(uint32_t daddr)
 {
 	struct security_table_entry *e;
 
@@ -174,7 +174,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 		printk(KERN_ERR "SUPERMAN: security_table - \t\tUpdating an existing entry...\n");
 		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
 		{
-			DeleteSecurityTableEntry(daddr);
+			RemoveSecurityTableEntry(daddr);
 			printk(KERN_ERR "SUPERMAN: security_table - \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
 			return false;
 		}
@@ -193,7 +193,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 
 		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
 		{
-			DeleteSecurityTableEntry(daddr);
+			RemoveSecurityTableEntry(daddr);
 			printk(KERN_ERR "SUPERMAN: security_table - \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
 			return false;
 		}

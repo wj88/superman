@@ -198,6 +198,14 @@ void InvokeSendDiscoveryRequest()
 
 void Run()
 {
+	// unsigned char* ifname = "eth0";
+	// unsigned int ifname_len = 5; // inc. null terminator
+
+	unsigned char* ifname = "lo";
+	unsigned int ifname_len = 3; // inc. null terminator
+
+	UpdateSupermanInterfaceTableEntry(ifname_len, ifname, true);
+
 	bool discoverySent = false;
 
 	// Capture the time now.
@@ -230,6 +238,8 @@ void Run()
 			usleep(250000); // wait in microseconds (250000 usecs = 0.25 secs, 1000000 usecs = 1 sec)
 		}
         }
+
+	UpdateSupermanInterfaceTableEntry(ifname_len, ifname, false);
 }
 
 int main(int argc, char **argv)

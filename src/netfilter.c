@@ -9,6 +9,7 @@
 #include "packet_info.h"
 #include "packet.h"
 #include "netlink.h"
+#include "interfaces_table.h"
 #include "security_table.h"
 #include "security.h"
 #include "processor.h"
@@ -29,13 +30,13 @@ static struct nf_hook_ops ops_name = {																		\
 // After sanity checks, before routing decisions.
 HOOK_DEF(hook_prerouting, nf_hook_prerouting, NF_IP_PRE_ROUTING)
 // After routing decisions if packet is for this host.
-//HOOK_DEF(hook_localin, nf_hook_localin, NF_IP_LOCAL_IN)
+HOOK_DEF(hook_localin, nf_hook_localin, NF_IP_LOCAL_IN)
 // If the packet is destined for another interface.
 //HOOK_DEF(hook_forward, nf_hook_forward, NF_IP_FORWARD)
 // For packets coming from local processes on their way out.
-//HOOK_DEF(hook_localout, nf_hook_localout, NF_IP_LOCAL_OUT)
+HOOK_DEF(hook_localout, nf_hook_localout, NF_IP_LOCAL_OUT)
 // Just before outbound packets "hit the wire".
-//HOOK_DEF(hook_postrouting, nf_hook_postrouting, NF_IP_POST_ROUTING)
+HOOK_DEF(hook_postrouting, nf_hook_postrouting, NF_IP_POST_ROUTING)
 
 
 /*
@@ -195,46 +196,6 @@ the packet at Pre Routing, allow us to intercept it and look backward to find th
 */
 
 
-
-// EXAMPLE OF IP FILTERING - OUT-OF-DATE
-/*
-unsigned char *deny_ip = "\x7f\x00\x00\x01";	// 127.0.0.1
-static int check_ip_packet(struct sk_buff *skb)
-{
-	// Grab the IP header
-	struct iphdr* ip_header = ip_hdr(skb);
-
-	if (ip_header->saddr == *(unsigned int *)deny_ip) { 
-		return NF_DROP;
-	}
-
-	return NF_ACCEPT;
-}
-*/
-
-// EXAMPLE OF TCP FILTERING - OUT-OF-DATE
-/*
-unsigned char *deny_port = "\x00\x19";	// port 25
-static int check_tcp_packet(struct sk_buff *skb)
-{
-	// Grab the IP header
-	struct iphdr* ip_header = ip_hdr(skb);
-
-	// Be sure this is a TCP packet first
-	if (ip_header->protocol != IPPROTO_TCP) {
-		return NF_ACCEPT;
-	}
-
-	struct tcphdr* tcp_header = (struct tcphdr*)skb_transport_header(skb);
-
-	// Now check the destination port
-	if ((thead->dest) == *(unsigned short *)deny_port) {
-		return NF_DROP;
-	}
-
-	return NF_ACCEPT;
-}
-*/
 
 inline bool is_valid_ip_packet(struct sk_buff* skb)
 {
@@ -415,6 +376,49 @@ unsigned int hook_prerouting_removed_p2p(struct superman_packet_info* spi, bool 
 	return FreeSupermanPacketInfo(spi);
 }
 
+unsigned int hook_localout_add_e2e(struct superman_packet_info* spi, bool result)
+{
+	if(result)
+	{
+		// Call their callback method, if we stole the packet.
+		spi->use_callback = true;
+	}
+
+	// Cleanup the SPI;
+	return FreeSupermanPacketInfo(spi);
+}
+
+unsigned int hook_localin_remove_e2e(struct superman_packet_info* spi, bool result)
+{
+	if(result)
+	{
+		if(!DecapsulatePacket(spi))
+		{
+			if(spi->result != NF_STOLEN) spi->result = NF_DROP;
+		}
+		else
+		{
+			// Call their callback method, if we stole the packet.
+			spi->use_callback = true;
+		}
+	}
+
+	// Cleanup the SPI;
+	return FreeSupermanPacketInfo(spi);
+}
+
+unsigned int hook_postrouting_add_p2p(struct superman_packet_info* spi, bool result)
+{
+	if(result)
+	{
+		// Call their callback method, if we stole the packet.
+		spi->use_callback = true;
+	}
+
+	// Cleanup the SPI;
+	return FreeSupermanPacketInfo(spi);
+}
+
 unsigned int hook_prerouting_post_sk_response(struct superman_packet_info* spi, bool result)
 {
 	if(result)
@@ -424,16 +428,13 @@ unsigned int hook_prerouting_post_sk_response(struct superman_packet_info* spi, 
 }
 
 // After sanity checks, before routing decisions.
-unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
-				struct sk_buff *skb,
-				const struct net_device *in,
-				const struct net_device *out,
-				int (*okfn)(struct sk_buff *))
+unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
 	struct superman_packet_info* spi;
+	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING)\n");
 
-	// Let non-IP packets through.
-	if(!is_valid_ip_packet(skb))
+	// Let non-IP packets and those of interfaces we're not monitoring.
+	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(in->ifindex))
 		return NF_ACCEPT;
 
 	// Construct a new SPI to handle this packet.
@@ -499,13 +500,28 @@ unsigned int hook_prerouting(	const struct nf_hook_ops *ops,
 	return RemoveP2PSecurity(spi, &hook_prerouting_removed_p2p);
 }
 
+// After sanity checks, before routing decisions.
+unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+{
+	struct superman_packet_info* spi;
+	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN)\n");
+
+	// Let non-IP packets and those of interfaces we're not monitoring.
+	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(in->ifindex))
+		return NF_ACCEPT;
+
+	// Construct a new SPI to handle this packet.
+	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
+
+	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+
+	return RemoveE2ESecurity(spi, &hook_localin_remove_e2e);
+}
+
 /*
+
 // After sanity checks, before routing decisions.
-unsigned int hook_localin(	const struct nf_hook_ops *ops,
-				struct sk_buff *skb,
-				const struct net_device *in,
-				const struct net_device *out,
-				int (*okfn)(struct sk_buff *))
+unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
 	//if(is_valid_ip_packet(skb) && is_superman_packet(skb))
 		return NF_ACCEPT;
@@ -513,45 +529,79 @@ unsigned int hook_localin(	const struct nf_hook_ops *ops,
 	//	return NF_DROP;           	// Drop ALL packets
 }
 
-// After sanity checks, before routing decisions.
-unsigned int hook_forward(	const struct nf_hook_ops *ops,
-				struct sk_buff *skb,
-				const struct net_device *in,
-				const struct net_device *out,
-				int (*okfn)(struct sk_buff *))
-{
-	//if(is_valid_ip_packet(skb) && is_superman_packet(skb))
-		return NF_ACCEPT;
-	//else
-	//	return NF_DROP;           	// Drop ALL packets
-}
-
-// After sanity checks, before routing decisions.
-unsigned int hook_localout(	const struct nf_hook_ops *ops,
-				struct sk_buff *skb,
-				const struct net_device *in,
-				const struct net_device *out,
-				int (*okfn)(struct sk_buff *))
-{
-	//if(is_valid_ip_packet(skb) && is_superman_packet(skb))
-		return NF_ACCEPT;
-	//else
-	//	return NF_DROP;           	// Drop ALL packets
-}
-
-// After sanity checks, before routing decisions.
-unsigned int hook_postrouting(	const struct nf_hook_ops *ops,
-				struct sk_buff *skb,
-				const struct net_device *in,
-				const struct net_device *out,
-				int (*okfn)(struct sk_buff *))
-{
-	//if(is_valid_ip_packet(skb) && is_superman_packet(skb))
-		return NF_ACCEPT;
-	//else
-	//	return NF_DROP;           	// Drop ALL packets
-}
 */
+
+
+// After sanity checks, before routing decisions.
+unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+{
+	struct superman_packet_info* spi;
+	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT)\n");
+
+	// Let non-IP packets and those of interfaces we're not monitoring.
+	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(out->ifindex))
+		return NF_ACCEPT;
+
+	// Construct a new SPI to handle this packet.
+	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
+
+	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+
+	if(!EncapsulatePacket(spi))
+	{
+		spi->result = NF_DROP;
+		return FreeSupermanPacketInfo(spi);
+	}
+
+	return AddE2ESecurity(spi, &hook_localout_add_e2e);
+}
+
+// After sanity checks, before routing decisions.
+unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+{
+	struct superman_packet_info* spi;
+	printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING)\n");
+
+	// Let non-IP packets and those of interfaces we're not monitoring.
+	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(out->ifindex))
+		return NF_ACCEPT;
+
+	// Construct a new SPI to handle this packet.
+	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
+
+	printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+
+	// Deal with special case SUPERMAN packets which we leave alone (after all, we made them)!
+	if(spi->shdr)
+	{
+		switch(spi->shdr->type)
+		{
+			case SUPERMAN_DISCOVERY_REQUEST_TYPE:			// It's a Discovery Request
+				printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tDiscovery Request Packet.\n");
+				spi->result = NF_ACCEPT;
+				return FreeSupermanPacketInfo(spi);
+				break;
+			case SUPERMAN_CERTIFICATE_REQUEST_TYPE:			// It's a Certificate Request
+				printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tCertificate Request Packet.\n");
+				spi->result = NF_ACCEPT;
+				return FreeSupermanPacketInfo(spi);
+				break;
+			case SUPERMAN_CERTIFICATE_EXCHANGE_TYPE:		// It's a Certificate Exchange
+				printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tCertificate Exchange Packet.\n");
+				spi->result = NF_ACCEPT;
+				return FreeSupermanPacketInfo(spi);
+				break;
+			case SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE:		// It's a Certificate Exchange With Broadcast Key
+				printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tCertificate Exchange With Broadcast Key Packet.\n");
+				spi->result = NF_ACCEPT;
+				return FreeSupermanPacketInfo(spi);
+				break;
+		}
+	}
+
+
+	return AddP2PSecurity(spi, &hook_postrouting_add_p2p);
+}
 
 /*
 The proc entry init and deinit functions deal with construction and destruction.
@@ -559,11 +609,11 @@ The proc entry init and deinit functions deal with construction and destruction.
 bool InitNetFilter(void)
 {
 	nf_register_hook(&nf_hook_prerouting);
-/*
 	nf_register_hook(&nf_hook_localin);
-	nf_register_hook(&nf_hook_forward);
 	nf_register_hook(&nf_hook_localout);
 	nf_register_hook(&nf_hook_postrouting);
+/*
+	nf_register_hook(&nf_hook_forward);
 */
 
 	return true;
@@ -572,11 +622,11 @@ bool InitNetFilter(void)
 void DeInitNetFilter(void)
 {
 	nf_unregister_hook(&nf_hook_prerouting);
-/*
 	nf_unregister_hook(&nf_hook_localin);
-	nf_unregister_hook(&nf_hook_forward);
 	nf_unregister_hook(&nf_hook_localout);
 	nf_unregister_hook(&nf_hook_postrouting);
+/*
+	nf_unregister_hook(&nf_hook_forward);
 */
 }
 

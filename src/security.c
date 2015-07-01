@@ -422,7 +422,7 @@ unsigned int RemoveE2ESecurityDone(struct superman_packet_info* spi, unsigned in
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - \t\tCrypto failed. err: %d, flags: %x.\n", err, crypto_aead_get_flags(aead));
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - \t\tPacket contents:\n");
-		dump_packet(spi->skb);
+		// dump_packet(spi->skb);
 	}
 
 	if(spi->tmp != NULL)
@@ -639,10 +639,9 @@ unsigned int AddP2PSecurityDone(struct superman_packet_info* spi, unsigned int (
 			// Increase the IP header size.
 			spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) + HMAC_LEN);
 
-			printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurityDone) - \t\tPacket length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
-
-			printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurityDone) - \t\tPacket contents:\n");
-			dump_packet(spi->skb);
+			// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurityDone) - \t\tPacket length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
+			// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurityDone) - \t\tPacket contents:\n");
+			// dump_packet(spi->skb);
 
 			result = true;
 		}
@@ -685,10 +684,9 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 
 	printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tAdding P2P security...\n");
 
-	printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
-
-	printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tPacket contents:\n");
-	dump_packet(spi->skb);
+	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
+	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tPacket contents:\n");
+	// dump_packet(spi->skb);
 
 	// If we don't need to secure this packet, accept it.
 	if(!spi->secure_packet)
@@ -747,7 +745,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	sg_init_table(sg, nfrags);
 
 	// Populate the contents scatterlist from the skb, from the end of the network header, including everything else.
-	printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tHashing %lu bytes...\n", spi->skb->len - sizeof(struct iphdr));
+	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tHashing %lu bytes...\n", spi->skb->len - sizeof(struct iphdr));
 	skb_to_sgvec(spi->skb, sg, skb_transport_offset(spi->skb), spi->skb->len - sizeof(struct iphdr));
 
 	// Allocate the request for the hmac
@@ -825,10 +823,9 @@ unsigned int RemoveP2PSecurityDone(struct superman_packet_info* spi, unsigned in
 		pskb_trim(spi->skb, spi->skb->len - HMAC_LEN);
 		spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) - HMAC_LEN);
 
-		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - \t\tPacket length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
-
-		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - \t\tPacket contents:\n");
-		dump_packet(spi->skb);
+		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - \t\tPacket length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
+		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - \t\tPacket contents:\n");
+		// dump_packet(spi->skb);
 
 	}
 	else
@@ -867,10 +864,9 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 
 	printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \tRemoving P2P security...\n");
 
-	printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
-
-	printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tPacket contents:\n");
-	dump_packet(spi->skb);
+	// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
+	// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tPacket contents:\n");
+	// dump_packet(spi->skb);
 
 	// If we don't need to secure this packet, accept it.
 	if(!spi->secure_packet)
@@ -927,7 +923,7 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 	sg_init_table(sg, nfrags);
 
 	// Populate the contents scatterlist from the skb, from the end of the network header, including everything else.
-	printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tHashing %lu bytes...\n", spi->skb->len - sizeof(struct iphdr) - HMAC_LEN);
+	// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tHashing %lu bytes...\n", spi->skb->len - sizeof(struct iphdr) - HMAC_LEN);
 	skb_to_sgvec(spi->skb, sg, skb_transport_offset(spi->skb), spi->skb->len - sizeof(struct iphdr) - HMAC_LEN);
 
 	// Allocate the request for the hmac

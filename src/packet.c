@@ -8,8 +8,8 @@
 #include <net/ip.h>
 
 #include "packet.h"
-#include "packet_info.h"
 #include "security.h"
+#include "interfaces_table.h"
 #include "security_table.h"
 
 static inline u_int8_t _encode_ip_protocol(u_int8_t protocol)
@@ -78,68 +78,154 @@ unsigned int hash_then_send_superman_packet(struct superman_packet_info* spi, bo
 	return FreeSupermanPacketInfo(spi);
 }
 
+bool EncapsulatePacket(struct superman_packet_info* spi)
+{
+	uint32_t iph_len;
+
+	printk(KERN_INFO "SUPERMAN: Packet - \tEncapsulating packet...\n");
+
+	// Make sure we have enough headroom.
+	if(skb_headroom(spi->skb) < sizeof(struct superman_header))
+	{
+		struct sk_buff* nskb;
+		nskb = skb_copy_expand(spi->skb, sizeof(struct superman_header), skb_tailroom(spi->skb), GFP_ATOMIC);
+		if(nskb == NULL)
+		{
+			printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
+			return false;
+		}
+
+		// Set old owner
+		if (spi->skb->sk != NULL)
+			skb_set_owner_w(nskb, spi->skb->sk);
+
+		// Clean up the old one
+		kfree_skb(spi->skb);
+		spi->skb = nskb;
+	}
+
+	// Determine the IP header length
+	iph_len = ((struct iphdr*)skb_network_header(spi->skb))->ihl << 2;
+
+	// Allocate some of the headroom to our new header
+	skb_put(spi->skb, sizeof(struct superman_header));
+
+	// Move the IP header to the start
+	memmove(spi->skb->data, spi->skb->data + iph_len, iph_len);
+
+	// Grab the new IP header reference
+	spi->iph = (struct iphdr*)spi->skb->data;
+
+	// Fill in the superman header
+	spi->shdr = (struct superman_header*)(spi->skb->data + iph_len);
+	spi->shdr->type = SUPERMAN_MAX_TYPE + spi->iph->protocol;				// We're preparing a superman packet.
+	spi->shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
+	spi->shdr->payload_len = spi->skb->len - iph_len - sizeof(struct superman_header);	// The payload length.	
+
+	// Update the IP header
+	spi->iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
+	spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) + sizeof(struct superman_header));	// Update the IP packet length
+	spi->iph->check = 0;									// No checksum yet
+	ip_send_check(spi->iph);
+
+	return true;
+}
+
+bool DecapsulatePacket(struct superman_packet_info* spi)
+{
+	uint32_t iph_len;
+
+	printk(KERN_INFO "SUPERMAN: Packet - \tDecapsulating packet...\n");
+
+	// Determine the IP header length
+	iph_len = ((struct iphdr*)skb_network_header(spi->skb))->ihl << 2;
+
+	// Update the IP header
+	spi->iph->protocol = spi->iph->protocol - SUPERMAN_PROTOCOL_NUM;			// Our SUPERMAN protocol number
+	spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) - sizeof(struct superman_header));	// Update the IP packet length
+	spi->iph->check = 0;									// No checksum yet
+
+	// Move the IP header inward to sit next to the payload
+	memmove(spi->skb->data + iph_len, spi->skb->data, iph_len);
+
+	// Remove the space at the start of the data, back into the headroom
+	skb_pull(spi->skb, sizeof(struct superman_header));
+
+	// Update our pointers
+	spi->shdr = NULL;
+	spi->iph = (struct iphdr*)spi->skb->data;
+	ip_send_check(spi->iph);
+
+	return true;
+}
+
 void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 {
 	struct net_device *dev;
+
 	printk(KERN_INFO "SUPERMAN: Packet - \tSend Discovery Request...\n");
+	
+	INTERFACE_ITERATOR_START(dev)
 
-	read_lock(&dev_base_lock);
-	for_each_netdev(&init_net, dev) {
+	struct sk_buff* tx_sk;
+	struct superman_header* shdr;
+	struct iphdr* iph;
+	void* payload;
+	struct superman_packet_info* spi;
 
-		struct sk_buff* tx_sk;
-		struct superman_header* shdr;
-		struct iphdr* iph;
-		void* payload;
-		struct superman_packet_info* spi;
+	printk(KERN_INFO "SUPERMAN: Packet - \tSend Discovery Request on %s...\n", dev->name);
 
-		// Allocate a new packet
-		tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sk_len, GFP_KERNEL);
-		tx_sk->dev = dev;
-		tx_sk->pkt_type = PACKET_OUTGOING | PACKET_BROADCAST;				// Its outgoing.
-		tx_sk->ip_summed = CHECKSUM_NONE;						// No need to checksum.
-
-		// Reserve space for the IP and SUPERMAN headers
-		skb_reserve(tx_sk, sizeof(struct iphdr) + sizeof(struct superman_header));
-
-		// Payload goes here.
-
-		//   2 bytes  |     sk_len
-		// -----------------------------
-		// |  sk len  |       sk       |
-		// -----------------------------
-
-		payload = skb_put(tx_sk, sk_len);
-		memcpy(payload, sk, sk_len);
-
-		// Setup the superman header
-		shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
-		skb_reset_transport_header(tx_sk);
-		shdr->type = SUPERMAN_DISCOVERY_REQUEST_TYPE;					// We're preparing a discovery request packet.
-		shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
-		shdr->payload_len = sk_len;							// A discovery request contains an SK.
-
-		// Setup the IP header
-		iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
-		skb_reset_network_header(tx_sk);
-		iph->version = 4;								// IPv4 only, for now.
-		iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
-		iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
-		iph->tot_len = htons(tx_sk->len);						// Total length of the packet
-		iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
-		iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
-		iph->ttl = 64;									// A recommended value (in seconds)
-		iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
-		iph->check = 0;									// No checksum yet
-		iph->saddr = inet_select_addr(dev, htonl(INADDR_BROADCAST), RT_SCOPE_UNIVERSE);	// Grab the most appropriate address.
-		//iph->daddr = ((iph->saddr & 0x00FFFFFF) + 0xFF000000),			// Broadcast the message to all on the subnet
-		iph->daddr = htonl(INADDR_BROADCAST);						// Broadcast the message to all on the subnet
-
-		spi = MallocSupermanPacketInfo(0, tx_sk, NULL, NULL, NULL);
-		send_superman_packet(spi, true);
+	// Allocate a new packet
+	tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sk_len, GFP_KERNEL);
+	if(tx_sk == NULL)
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
+		continue;
 	}
+	tx_sk->dev = dev;
+	tx_sk->pkt_type = PACKET_OUTGOING | PACKET_BROADCAST;				// Its outgoing.
+	tx_sk->ip_summed = CHECKSUM_NONE;						// No need to checksum.
 
-	read_unlock(&dev_base_lock);
+	// Reserve space for the IP and SUPERMAN headers
+	skb_reserve(tx_sk, sizeof(struct iphdr) + sizeof(struct superman_header));
 
+	// Payload goes here.
+
+	//   2 bytes  |     sk_len
+	// -----------------------------
+	// |  sk len  |       sk       |
+	// -----------------------------
+
+	payload = skb_put(tx_sk, sk_len);
+	memcpy(payload, sk, sk_len);
+
+	// Setup the superman header
+	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
+	skb_reset_transport_header(tx_sk);
+	shdr->type = SUPERMAN_DISCOVERY_REQUEST_TYPE;					// We're preparing a discovery request packet.
+	shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->payload_len = sk_len;							// A discovery request contains an SK.
+
+	// Setup the IP header
+	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
+	skb_reset_network_header(tx_sk);
+	iph->version = 4;								// IPv4 only, for now.
+	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
+	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
+	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
+	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
+	iph->ttl = 64;									// A recommended value (in seconds)
+	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
+	iph->check = 0;									// No checksum yet
+	iph->saddr = inet_select_addr(dev, htonl(INADDR_BROADCAST), RT_SCOPE_UNIVERSE);	// Grab the most appropriate address.
+	//iph->daddr = ((iph->saddr & 0x00FFFFFF) + 0xFF000000),			// Broadcast the message to all on the subnet
+	iph->daddr = htonl(INADDR_BROADCAST);						// Broadcast the message to all on the subnet
+
+	spi = MallocSupermanPacketInfo(0, tx_sk, NULL, NULL, NULL);
+	send_superman_packet(spi, true);
+
+	INTERFACE_ITERATOR_END
 	printk(KERN_INFO "SUPERMAN: Packet - \t... Send Discovery Request done.\n");
 }
 
@@ -173,6 +259,11 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 
 	// Allocate a new packet
 	tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sk_len, GFP_KERNEL);
+	if(tx_sk == NULL)
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
+		return;
+	}
 	tx_sk->dev = dev;
 	tx_sk->pkt_type = PACKET_OUTGOING;						// Its outgoing.
 	tx_sk->ip_summed = CHECKSUM_NONE;						// No need to checksum.
@@ -250,6 +341,11 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 
 	// Allocate a new packet
 	tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sizeof(__be16) + certificate_len, GFP_KERNEL);
+	if(tx_sk == NULL)
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
+		return;
+	}
 	tx_sk->dev = dev;
 	tx_sk->pkt_type = PACKET_OUTGOING;						// Its outgoing.
 	tx_sk->ip_summed = CHECKSUM_NONE;						// No need to checksum.
@@ -330,6 +426,11 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 
 	// Allocate a new packet
 	tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sizeof(__be16) + certificate_len + sizeof(__be16) + broadcast_key_len, GFP_KERNEL);
+	if(tx_sk == NULL)
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
+		return;
+	}
 	tx_sk->dev = dev;
 	tx_sk->pkt_type = PACKET_OUTGOING;						// Its outgoing.
 	tx_sk->ip_summed = CHECKSUM_NONE;						// No need to checksum.
@@ -373,7 +474,6 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	iph->daddr = addr;								// Broadcast the message to all on the subnet
 
 	spi = MallocSupermanPacketInfo(0, tx_sk, NULL, NULL, NULL);
-	//send_superman_packet(spi, true);
 	AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	// Dereference the device.
@@ -384,6 +484,142 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 void SendAuthenticatedSKRequestPacket(uint32_t addr)
 {
 
+}
+
+void SendInvalidateSKPacket(uint32_t addr)
+{
+	struct net_device *dev;
+
+	INTERFACE_ITERATOR_START(dev)
+
+	struct in_addr;
+	struct sk_buff* tx_sk;
+	struct superman_header* shdr;
+	struct iphdr* iph;
+	void* payload;
+	struct superman_packet_info* spi;
+
+	printk(KERN_INFO "SUPERMAN: Packet - \tSend SK Invalidate...\n");
+
+	// Allocate a new packet
+	tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sizeof(addr), GFP_KERNEL);
+	if(tx_sk == NULL)
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
+		continue;
+	}
+	tx_sk->dev = dev;
+	tx_sk->pkt_type = PACKET_OUTGOING | PACKET_BROADCAST;				// Its outgoing.
+	tx_sk->ip_summed = CHECKSUM_NONE;						// No need to checksum.
+
+	// Reserve space for the IP and SUPERMAN headers
+	skb_reserve(tx_sk, sizeof(struct iphdr) + sizeof(struct superman_header));
+
+	// Payload goes here.
+
+	// ----------------
+	// |  IP Address  |
+	// ----------------
+
+	payload = skb_put(tx_sk, sizeof(addr));
+	*((__be32*)payload) = htonl(addr);
+
+	// Setup the superman header
+	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
+	skb_reset_transport_header(tx_sk);
+	shdr->type = SUPERMAN_SK_INVALIDATE_TYPE;					// We're preparing an SK invalidate packet.
+	shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->payload_len = sizeof(addr);						// An SK invalidate contains an address.
+
+	// Setup the IP header
+	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
+	skb_reset_network_header(tx_sk);
+	iph->version = 4;								// IPv4 only, for now.
+	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
+	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
+	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
+	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
+	iph->ttl = 64;									// A recommended value (in seconds)
+	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
+	iph->check = 0;									// No checksum yet
+	iph->saddr = inet_select_addr(dev, htonl(INADDR_BROADCAST), RT_SCOPE_UNIVERSE);	// Grab the most appropriate address.
+	iph->daddr = htonl(INADDR_BROADCAST);						// Broadcast the message to all on the subnet
+
+	spi = MallocSupermanPacketInfo(0, tx_sk, NULL, NULL, NULL);
+	AddE2ESecurity(spi, hash_then_send_superman_packet);
+
+	INTERFACE_ITERATOR_END
+	printk(KERN_INFO "SUPERMAN: Packet - \t... Send SK Invalidate done.\n");
+}
+
+
+void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key)
+{
+	struct net_device *dev;
+
+	INTERFACE_ITERATOR_START(dev)
+
+	struct in_addr;
+	struct sk_buff* tx_sk;
+	struct superman_header* shdr;
+	struct iphdr* iph;
+	void* payload;
+	struct superman_packet_info* spi;
+
+	printk(KERN_INFO "SUPERMAN: Packet - \tSend SK Invalidate...\n");
+
+	// Allocate a new packet
+	tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sizeof(__be16) + broadcast_key_len, GFP_KERNEL);
+	if(tx_sk == NULL)
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
+		continue;
+	}
+	tx_sk->dev = dev;
+	tx_sk->pkt_type = PACKET_OUTGOING | PACKET_BROADCAST;				// Its outgoing.
+	tx_sk->ip_summed = CHECKSUM_NONE;						// No need to checksum.
+
+	// Reserve space for the IP and SUPERMAN headers
+	skb_reserve(tx_sk, sizeof(struct iphdr) + sizeof(struct superman_header));
+
+	// Payload goes here.
+
+	// ------------------------------
+	// |  BKey len | BKey           |
+	// ------------------------------
+
+	payload = skb_put(tx_sk, broadcast_key_len + sizeof(__be16));
+	*((__be16*)payload) = htons(broadcast_key_len);
+	memcpy(payload + sizeof(__be16), broadcast_key, broadcast_key_len);
+
+	// Setup the superman header
+	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
+	skb_reset_transport_header(tx_sk);
+	shdr->type = SUPERMAN_SK_INVALIDATE_TYPE;					// We're preparing a broadcast key exchange packet.
+	shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->payload_len = sizeof(__be16) + broadcast_key_len;				// A broadcast key exchange packet contains a broadcast key.
+
+	// Setup the IP header
+	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
+	skb_reset_network_header(tx_sk);
+	iph->version = 4;								// IPv4 only, for now.
+	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
+	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
+	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
+	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
+	iph->ttl = 64;									// A recommended value (in seconds)
+	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
+	iph->check = 0;									// No checksum yet
+	iph->saddr = inet_select_addr(dev, htonl(INADDR_BROADCAST), RT_SCOPE_UNIVERSE);	// Grab the most appropriate address.
+	iph->daddr = htonl(INADDR_BROADCAST);						// Broadcast the message to all on the subnet
+
+	spi = MallocSupermanPacketInfo(0, tx_sk, NULL, NULL, NULL);
+	AddE2ESecurity(spi, hash_then_send_superman_packet);
+
+	INTERFACE_ITERATOR_END
+	printk(KERN_INFO "SUPERMAN: Packet - \t... Send Broadcast Key Exchange done.\n");
 }
 
 #endif

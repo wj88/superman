@@ -8,6 +8,7 @@
 #include <asm/byteorder.h>
 
 #include "superman.h"
+#include "packet_info.h"
 
 
 enum {
@@ -53,13 +54,16 @@ struct superman_header {
 inline bool is_superman_packet(struct sk_buff* skb);
 inline struct superman_header* get_superman_header(struct sk_buff *skb);
 
-
+bool EncapsulatePacket(struct superman_packet_info* spi);
+bool DecapsulatePacket(struct superman_packet_info* spi);
 
 void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk);
 void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char* sk);
 void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsigned char* certificate);
 void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key);
 void SendAuthenticatedSKRequestPacket(uint32_t addr);
+
+void SendInvalidateSKPacket(uint32_t addr);
 
 /*
 void SendCertificateRequest(struct sk_buff* rx_sk);

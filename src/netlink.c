@@ -26,6 +26,9 @@ int superman_family_id = -1;										\
 
 enum {
 // Local Kernel state updating from the Daemon
+	K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY,
+#define K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY
+
 	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY,
 #define K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY
 
@@ -78,6 +81,7 @@ enum {
 };
 
 
+#define K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_NAME				"Update an interface table entry"
 #define K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_NAME				"Update a security table entry"
 #define K_UPDATE_SUPERMAN_BROADCAST_KEY_NAME					"Update the broadcast Key"
 
@@ -100,6 +104,7 @@ static struct {
 	int type;
 	char *name;
 } superman_typenames[SUPERMAN_MAX] = {
+	{ K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY,			K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_NAME				},
 	{ K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY,			K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_NAME				},
 	{ K_UPDATE_SUPERMAN_BROADCAST_KEY,				K_UPDATE_SUPERMAN_BROADCAST_KEY_NAME					},
 	{ K_SEND_SUPERMAN_DISCOVERY_REQUEST,				K_SEND_SUPERMAN_DISCOVERY_REQUEST_NAME					},
@@ -127,6 +132,25 @@ static inline char* superman_msg_type_to_str(int type)
 	}
 	return "Unknown message type";
 }
+
+// K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY
+enum {
+	__K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_FIRST = 0,
+	K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_INTERFACE_NAME,
+	K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MONITOR_FLAG,
+	__K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_LAST,
+};
+#define K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MIN (__K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_FIRST + 1)
+#define K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MAX (__K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_LAST - 1)
+typedef struct k_update_superman_interface_table_entry_msg {
+	uint32_t	interface_name_len;
+	unsigned char*	interface_name;
+	bool		monitor_flag;
+} k_update_superman_interface_table_entry_msg_t;
+static struct nla_policy k_update_superman_interface_table_entry_genl_policy[K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MAX + 1] = {
+	[K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_INTERFACE_NAME]				=	{ .type = NLA_UNSPEC	},
+	[K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MONITOR_FLAG]				=	{ .type = NLA_FLAG	},
+};
 
 // K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY
 enum {
@@ -480,6 +504,24 @@ static const struct genl_multicast_group superman_mc_groups[] = {
 		return 0;													\
 	}															\
 	/* printk(KERN_INFO "SUPERMAN: Netlink - \t...netlink message parsed ok.\n"); */
+
+int k_update_superman_interface_table_entry(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	uint32_t	interface_name_len;
+	unsigned char*	interface_name;
+	bool		monitor_flag;
+	GENL_PARSE(K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MAX, k_update_superman_interface_table_entry_genl_policy)
+	interface_name_len = nla_len(attrs[K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_INTERFACE_NAME]);
+	interface_name = kmalloc(interface_name_len, GFP_ATOMIC);
+	nla_memcpy(interface_name, attrs[K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_INTERFACE_NAME], interface_name_len);
+	monitor_flag = nla_get_flag(attrs[K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MONITOR_FLAG]);
+
+	UpdateSupermanInterfaceTableEntry(interface_name_len, interface_name, monitor_flag);
+
+	kfree(interface_name);
+
+	return 0;
+}
 
 int k_update_superman_security_table_entry(struct sk_buff *skb_msg, struct genl_info *info)
 {
@@ -944,6 +986,7 @@ bool CheckForMessages(void)
 static struct genl_ops superman_ops[SUPERMAN_MAX] = {
 
 	// Daemon to Kernel functions
+	SUPERMAN_OP(K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY, k_update_superman_interface_table_entry_genl_policy, k_update_superman_interface_table_entry)
 	SUPERMAN_OP(K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY, k_update_superman_security_table_entry_genl_policy, k_update_superman_security_table_entry)
 	SUPERMAN_OP(K_UPDATE_SUPERMAN_BROADCAST_KEY, k_update_superman_broadcast_key_genl_policy, k_update_superman_broadcast_key)
 	SUPERMAN_OP(K_SEND_SUPERMAN_DISCOVERY_REQUEST, k_send_superman_discovery_request_genl_policy, k_send_superman_discovery_request)
@@ -969,7 +1012,7 @@ static struct genl_ops superman_ops[SUPERMAN_MAX] = {
 
 #ifndef __KERNEL__
 
-#define D_GENL_START(K_SUPERMAN_OPERATION, ATTRS_SIZE)								\
+#define D_GENL_START(K_SUPERMAN_OPERATION)								\
 	struct nl_msg *msg;											\
 	int fail = 0;												\
 														\
@@ -977,7 +1020,6 @@ static struct genl_ops superman_ops[SUPERMAN_MAX] = {
 														\
 	/* Construct a new message */										\
 	msg = nlmsg_alloc();											\
-	/*msg = nlmsg_alloc_size(sizeof(struct genlmsghdr) + ATTRS_SIZE);*/					\
 														\
 	/* Add the Generic Netlink header to the netlink message. */						\
 	genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, superman_family_id, 0, 0, K_SUPERMAN_OPERATION, 0);		\
@@ -999,9 +1041,20 @@ static struct genl_ops superman_ops[SUPERMAN_MAX] = {
 
 #define D_GENL_CALC_NLA_SIZE(contents) nlmsg_alloc()
 
+void UpdateSupermanInterfaceTableEntry(uint32_t interface_name_len, unsigned char* interface_name, bool monitor_flag)
+{
+	D_GENL_START(K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY)
+	if(	nla_put		(msg,	K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_INTERFACE_NAME,			interface_name_len,	interface_name	))
+		fail = 1;
+	if( monitor_flag &&
+		nla_put_flag	(msg,	K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MONITOR_FLAG								))
+		fail = 1;
+	D_GENL_FINISH
+}
+
 void UpdateSupermanSecurityTableEntry(uint32_t address, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
 {
-	D_GENL_START(K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY, nla_total_size(4) + nla_total_size(1) + nla_total_size(sk_len) + nla_total_size(ske_len) + nla_total_size(skp_len))
+	D_GENL_START(K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY)
 	if(	nla_put_u32	(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_ADDRESS,							address		) ||
 		nla_put_u8	(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_FLAG,							flag		) ||
 		nla_put		(msg,	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_ATTR_SK,					sk_len,			sk		) ||
@@ -1015,10 +1068,12 @@ void UpdateSupermanSecurityTableEntry(uint32_t address, uint8_t flag, uint32_t s
 
 void UpdateSupermanBroadcastKey(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, bool overwrite)
 {
-	D_GENL_START(K_UPDATE_SUPERMAN_BROADCAST_KEY, nla_total_size(broadcast_key_len))
+	D_GENL_START(K_UPDATE_SUPERMAN_BROADCAST_KEY)
 	if(	nla_put		(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SK,					sk_len,			sk		) ||
 		nla_put		(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKE,					ske_len,		ske		) ||
-		nla_put		(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKP,					skp_len,		skp		) ||
+		nla_put		(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKP,					skp_len,		skp		))
+		fail = 1;
+	if( overwrite &&
 		nla_put_flag	(msg,	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_OVERWRITE										))
 		fail = 1;
 	D_GENL_FINISH
@@ -1026,7 +1081,7 @@ void UpdateSupermanBroadcastKey(uint32_t sk_len, unsigned char* sk, uint32_t ske
 
 void SendSupermanDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
 {
-	D_GENL_START(K_SEND_SUPERMAN_DISCOVERY_REQUEST, nla_total_size(sk_len))
+	D_GENL_START(K_SEND_SUPERMAN_DISCOVERY_REQUEST)
 	if(	nla_put		(msg,	K_SEND_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,					sk_len,			sk		))
 		fail = 1;
 	D_GENL_FINISH
@@ -1034,7 +1089,7 @@ void SendSupermanDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
 
 void SendSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned char* sk)
 {
-	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_REQUEST, nla_total_size(4) + nla_total_size(sk_len))
+	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_REQUEST)
 	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,							address		) ||
 		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,					sk_len,			sk		))
 		fail = 1;
@@ -1043,7 +1098,7 @@ void SendSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned 
 
 void SendSupermanCertificateExchange(uint32_t address, uint32_t certificate_len, unsigned char* certificate)
 {
-	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE, nla_total_size(4) + nla_total_size(certificate_len))
+	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE)
 	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS,							address		) ||
 		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE,				certificate_len,	certificate	))
 		fail = 1;
@@ -1052,7 +1107,7 @@ void SendSupermanCertificateExchange(uint32_t address, uint32_t certificate_len,
 
 void SendSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t certificate_len, unsigned char* certificate)
 {
-	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY, nla_total_size(4) + nla_total_size(certificate_len) + nla_total_size(broadcast_key_len))
+	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY)
 	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS,					address		) ||
 		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,	certificate_len,	certificate	))
 		fail = 1;
@@ -1061,7 +1116,7 @@ void SendSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t 
 
 void SendSupermanBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key)
 {
-	D_GENL_START(K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE, nla_total_size(broadcast_key_len))
+	D_GENL_START(K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE)
 	if(	nla_put		(msg,	K_SEND_SUPERMAN_BROADCAST_KEY_EXCHANGE_ATTR_BROADCAST_KEY,			broadcast_key_len, 	broadcast_key	))
 		fail = 1;
 	D_GENL_FINISH
@@ -1069,7 +1124,7 @@ void SendSupermanBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char*
 
 void SendSupermanSKInvalidate(uint32_t address)
 {
-	D_GENL_START(K_SEND_SUPERMAN_SK_INVALIDATE, nla_total_size(4))
+	D_GENL_START(K_SEND_SUPERMAN_SK_INVALIDATE)
 	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_SK_INVALIDATE_ATTR_ADDRESS,								address		))
 		fail = 1;
 	D_GENL_FINISH
