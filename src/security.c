@@ -190,7 +190,7 @@ unsigned int AddE2ESecurityDone(struct superman_packet_info* spi, unsigned int (
 	
 	if(err == 0)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone) - \t\tCrypto completed successfully.");
+		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone) - \t\tCrypto completed successfully.");
 
 
 		// Discussed this with Andrew - we cannot trim the excess bytes and need to leave in the full block.
@@ -199,6 +199,7 @@ unsigned int AddE2ESecurityDone(struct superman_packet_info* spi, unsigned int (
 		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone) - \t\tPacket contents:\n");
 		// dump_packet(spi->skb);
 
+		ip_send_check(spi->iph);
 		result = true;
 	}
 	else
@@ -247,7 +248,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	int sglists;
 	struct aead_request *req;
 
-	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tAdding E2E security...\n");
+	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tAdding E2E security...\n");
 
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tPacket contents:\n");
@@ -294,12 +295,12 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	blksize = ALIGN(crypto_aead_blocksize(aead), 4);
 
 	// The bloated payload (payload rounded up to the nearest block size)
-	aligned_payload_len = ALIGN(spi->shdr->payload_len, blksize);
+	aligned_payload_len = ALIGN(ntohs(spi->shdr->payload_len), blksize);
 
 	// Size of the padding added to make contents up to block size
-	padding_len = aligned_payload_len - spi->shdr->payload_len;
+	padding_len = aligned_payload_len - ntohs(spi->shdr->payload_len);
 
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tBlock size: %u, Payload len: %u, Aligned Payload len: %u, Padding len: %u, Num blocks: %u\n", blksize, spi->shdr->payload_len, aligned_payload_len, padding_len, aligned_payload_len / blksize);
+	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tBlock size: %u, Payload len: %u, Aligned Payload len: %u, Padding len: %u, Num blocks: %u\n", blksize, ntohs(spi->shdr->payload_len), aligned_payload_len, padding_len, aligned_payload_len / blksize);
 
 	// Size of the associated data
 	assoc_len = sizeof(struct iphdr) + sizeof(struct superman_header);
@@ -381,7 +382,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	// Crypto finished immediately, go straight to the end. 
 	else
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tCrypto is running syncronously...\n");
+		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tCrypto is running syncronously...\n");
 		spi->arg = NULL;
 		spi->result = AddE2ESecurityDone(spi, callback, err);
 	}
@@ -397,25 +398,26 @@ unsigned int RemoveE2ESecurityDone(struct superman_packet_info* spi, unsigned in
 
 	if(err == 0)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - \t\tCrypto completed successfully.");
+		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - \t\tCrypto completed successfully.");
 
 		// Size of a single block
 		blksize = ALIGN(crypto_aead_blocksize(aead), 4);
 
 		// The bloated payload (payload rounded up to the nearest block size)
-		aligned_payload_len = ALIGN(spi->shdr->payload_len, blksize);
+		aligned_payload_len = ALIGN(ntohs(spi->shdr->payload_len), blksize);
 
 		// Reduce the IP header size.
-		spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) - (aligned_payload_len - spi->shdr->payload_len) - MAC_LEN);
+		spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) - (aligned_payload_len - ntohs(spi->shdr->payload_len)) - MAC_LEN);
 
 		// Trim the excess off the end, leaving the unencrypted payload and headers.
-		pskb_trim(spi->skb, spi->skb->len - (aligned_payload_len - spi->shdr->payload_len) - MAC_LEN);
+		pskb_trim(spi->skb, spi->skb->len - (aligned_payload_len - ntohs(spi->shdr->payload_len)) - MAC_LEN);
 
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - \t\tPacket length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - \t\tPacket contents:\n");
 		// dump_packet(spi->skb);
 
+		ip_send_check(spi->iph);
 		result = true;
 	}
 	else
@@ -496,7 +498,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	-----------------------------------------------------------------
 */
 
-	printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tRemoving E2E security...\n");
+	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tRemoving E2E security...\n");
 
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tPacket contents:\n");
@@ -542,12 +544,12 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	blksize = ALIGN(crypto_aead_blocksize(aead), 4);
 
 	// The bloated payload (payload rounded up to the nearest block size)
-	aligned_payload_len = ALIGN(spi->shdr->payload_len, blksize);
+	aligned_payload_len = ALIGN(ntohs(spi->shdr->payload_len), blksize);
 
 	// Size of the padding added to make contents up to block size
-	padding_len = aligned_payload_len - spi->shdr->payload_len;
+	padding_len = aligned_payload_len - ntohs(spi->shdr->payload_len);
 
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tBlock size: %u, Payload len: %u, Aligned Payload len: %u, Padding len: %u, Num blocks: %u\n", blksize, spi->shdr->payload_len, aligned_payload_len, padding_len, aligned_payload_len / blksize);
+	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tBlock size: %u, Payload len: %u, Aligned Payload len: %u, Padding len: %u, Num blocks: %u\n", blksize, ntohs(spi->shdr->payload_len), aligned_payload_len, padding_len, aligned_payload_len / blksize);
 
 	// Size of the associated data
 	assoc_len = sizeof(struct iphdr) + sizeof(struct superman_header);
@@ -625,7 +627,7 @@ unsigned int AddP2PSecurityDone(struct superman_packet_info* spi, unsigned int (
 	{
 		struct sk_buff* trailer;
 
-		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurityDone) - \t\tCrypto completed successfully.");
+		// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurityDone) - \t\tCrypto completed successfully.");
 
 		// Make sure there is space for our HMAC to go at the end of the data.
 		if(skb_cow_data(spi->skb, HMAC_LEN, &trailer) >= 0)
@@ -643,6 +645,7 @@ unsigned int AddP2PSecurityDone(struct superman_packet_info* spi, unsigned int (
 			// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurityDone) - \t\tPacket contents:\n");
 			// dump_packet(spi->skb);
 
+			ip_send_check(spi->iph);
 			result = true;
 		}
 		else
@@ -682,7 +685,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	struct ahash_request *req;
 	struct sk_buff* trailer;
 
-	printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tAdding P2P security...\n");
+	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tAdding P2P security...\n");
 
 	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tPacket contents:\n");
@@ -772,7 +775,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	// Crypto finished immediately, go straight to the end. 
 	else
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tCrypto is running syncronously...\n");
+		// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tCrypto is running syncronously...\n");
 		spi->arg = NULL;
 		spi->result = AddP2PSecurityDone(spi, callback, err);
 	}
@@ -787,10 +790,10 @@ unsigned int RemoveP2PSecurityDone(struct superman_packet_info* spi, unsigned in
 	if(err == 0)
 	{
 		int i;
-		unsigned char* storedHMAC; // = payload + shdr->payload_len + MAC_LEN;
+		unsigned char* storedHMAC; // = payload + ntohs(shdr->payload_len) + MAC_LEN;
 		unsigned char* calcHMAC = spi->tmp;
 
-		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - \t\tCrypto completed successfully.\n");
+		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - \t\tCrypto completed successfully.\n");
 
 		storedHMAC = kmalloc(HMAC_LEN, GFP_ATOMIC);
 		if(storedHMAC)
@@ -827,6 +830,7 @@ unsigned int RemoveP2PSecurityDone(struct superman_packet_info* spi, unsigned in
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - \t\tPacket contents:\n");
 		// dump_packet(spi->skb);
 
+		ip_send_check(spi->iph);
 	}
 	else
 		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - \t\tCrypto failed.\n");
@@ -862,7 +866,7 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 	struct ahash_request *req;
 	struct sk_buff* trailer;
 
-	printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \tRemoving P2P security...\n");
+	// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \tRemoving P2P security...\n");
 
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tPacket contents:\n");
@@ -950,7 +954,7 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 	// Crypto finished immediately, go straight to the end. 
 	else
 	{
-		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tCrypto is running syncronously...\n");
+		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \t\tCrypto is running syncronously...\n");
 		spi->arg = NULL;
 		spi->result = RemoveP2PSecurityDone(spi, callback, err);
 	}

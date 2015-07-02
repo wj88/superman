@@ -5,6 +5,9 @@
 #include "packet.h"
 #include "security_table.h"
 
+static unsigned int superman_packet_info_count = 0;
+static unsigned int superman_packet_info_id_counter = 0;
+
 // A useful function shamelessly stolen from the AODV-UU implementation.
 static inline int if_info_from_net_device(struct in_addr *addr, struct in_addr *baddr, const struct net_device *dev)
 {
@@ -48,7 +51,16 @@ static inline int if_info_from_net_device(struct in_addr *addr, struct in_addr *
 struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
 	struct superman_packet_info* spi;
+	++superman_packet_info_count;
+	++superman_packet_info_id_counter;
+	// printk(KERN_INFO "SUPERMAN: packet_info: \tAllocating a new superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, superman_packet_info_id_counter);
+
 	spi = kmalloc(sizeof(struct superman_packet_info), GFP_ATOMIC);
+	if(spi == NULL)
+	{
+		printk(KERN_INFO "SUPERMAN: packet_info: \t\tFailed to allocate a new superman_packet_info.\n");
+		return NULL;
+	}
 
 	// Information provided by the hook function where the SPI originated.
 	spi->hooknum = hooknum;
@@ -105,16 +117,12 @@ struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, stru
 	{
 		case IS_MYADDR:
 		case IS_LOOPBACK:
-			printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is from me or is a loopback packet.\n");
-
-			// TODO: The next line is very temporary
-			spi->secure_packet = true;
-
+			// printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is from me or is a loopback packet.\n");
 			spi->secure_packet = false;
 			break;
 		case IS_MULTICAST:
 		case IS_BROADCAST:
-			printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is a broadcast or multicast packet.\n");
+			// printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is a broadcast or multicast packet.\n");
 			spi->secure_packet = true;
 			spi->use_broadcast_key = true;
 			break;
@@ -142,22 +150,38 @@ struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, stru
 	spi->arg = NULL;
 	spi->tmp = NULL;
 
+	// Temporary spi identifier
+	spi->id = superman_packet_info_id_counter;
+
 	return spi;
 }
 
 unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi)
 {
 	unsigned int nf_result = spi->result;
+	superman_packet_info_count--;
+	// printk(KERN_INFO "SUPERMAN: packet_info: \tFreeing superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, spi->id);
+
 	if(spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)
 	{
 		if(spi->okfn != NULL)
+		{
+			printk(KERN_INFO "SUPERMAN: packet_info: \tCalling the OK function because we stole the packet...\n");
 			spi->okfn(spi->skb);
+		}
 	}
 	else if(!spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)
 	{
 		kfree_skb(spi->skb);
 		spi->skb = NULL;
 	}
+	// else if(spi->result == NF_ACCEPT)
+	// 	printk(KERN_INFO "SUPERMAN: packet_info: \tAccepting the packet...\n");
+	// else if(spi->result == NF_DROP)
+	// 	printk(KERN_INFO "SUPERMAN: packet_info: \tDropping the packet...\n");
+	// else if(spi->result == NF_STOLEN)
+	// 	printk(KERN_INFO "SUPERMAN: packet_info: \tStealing the packet...\n");
+
 	kfree(spi);
 	return nf_result;
 }

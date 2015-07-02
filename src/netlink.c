@@ -494,15 +494,15 @@ static const struct genl_multicast_group superman_mc_groups[] = {
 	[K_SUPERMAN_MC_GROUP] = { .name	= K_SUPERMAN_MC_GROUP_NAME, },
 };
 
-#define GENL_PARSE(ATTR_MAX, POLICY)												\
-	struct nlattr *attrs[ATTR_MAX + 1];											\
-	printk(KERN_INFO "SUPERMAN: Netlink - \tReceived message \"%s\".\n", superman_msg_type_to_str(info->genlhdr->cmd));	\
-	/* printk(KERN_INFO "SUPERMAN: Netlink - \tParsing netlink message...\n"); */						\
-	if(nlmsg_parse(info->nlhdr, superman_genl_family.hdrsize + GENL_HDRLEN, attrs, ATTR_MAX + 1, POLICY) < 0)		\
-	{															\
-		printk(KERN_INFO "SUPERMAN: Netlink - \tFailed to parse netlink message\n");					\
-		return 0;													\
-	}															\
+#define GENL_PARSE(ATTR_MAX, POLICY)													\
+	struct nlattr *attrs[ATTR_MAX + 1];												\
+	/* printk(KERN_INFO "SUPERMAN: Netlink - \tReceived message \"%s\".\n", superman_msg_type_to_str(info->genlhdr->cmd)); */	\
+	/* printk(KERN_INFO "SUPERMAN: Netlink - \tParsing netlink message...\n"); */							\
+	if(nlmsg_parse(info->nlhdr, superman_genl_family.hdrsize + GENL_HDRLEN, attrs, ATTR_MAX + 1, POLICY) < 0)			\
+	{																\
+		printk(KERN_INFO "SUPERMAN: Netlink - \tFailed to parse netlink message\n");						\
+		return 0;														\
+	}																\
 	/* printk(KERN_INFO "SUPERMAN: Netlink - \t...netlink message parsed ok.\n"); */
 
 int k_update_superman_interface_table_entry(struct sk_buff *skb_msg, struct genl_info *info)

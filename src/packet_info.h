@@ -59,6 +59,9 @@ struct superman_packet_info
 	// Temporary storage locations for use by any phase of the process as appropriate.
 	void* arg;
 	void* tmp;
+
+	// Temporary spi identifier
+	uint32_t id;
 };
 
 struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));

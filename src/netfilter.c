@@ -211,15 +211,15 @@ unsigned int process_certificate_exchange_packet(struct superman_packet_info* sp
 	uint32_t certificate_len;
 	unsigned char* certificate;
 
-	printk(KERN_INFO "SUPERMAN: Netfilter - \t\tProcessing the certificate exchange...\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter - \t\tProcessing the certificate exchange...\n");
 
 	// Carefully, with plenty of bounds checking, extract the contents of the payload in the component parts.
-	if(spi->shdr->payload_len >= sizeof(__be16))
+	if(ntohs(spi->shdr->payload_len) >= sizeof(__be16))
 	{
 		certificate_len = ntohs(*((__be16*) spi->payload));
-		printk(KERN_INFO "SUPERMAN: Netfilter - \t\tCertificate length: %u\n", certificate_len);
+		// printk(KERN_INFO "SUPERMAN: Netfilter - \t\tCertificate length: %u\n", certificate_len);
 
-		if(spi->shdr->payload_len >= sizeof(__be16) + certificate_len)
+		if(ntohs(spi->shdr->payload_len) >= sizeof(__be16) + certificate_len)
 		{
 			certificate = (unsigned char*)(spi->payload + sizeof(__be16));
 			ReceivedSupermanCertificateExchange(spi->addr, certificate_len, certificate);
@@ -229,7 +229,6 @@ unsigned int process_certificate_exchange_packet(struct superman_packet_info* sp
 	}
 	else
 		printk(KERN_INFO "SUPERMAN: Netfilter - \t\t\tPayload size mismatch (certificate_len).\n");
-		
 
 	spi->use_callback = false;
 	if(spi->result != NF_STOLEN) spi->result = NF_DROP;
@@ -247,24 +246,24 @@ unsigned int process_certificate_exchange_with_broadcast_key_packet(struct super
 	uint32_t broadcast_key_len;
 	unsigned char* broadcast_key;
 
-	printk(KERN_INFO "SUPERMAN: Netfilter - \t\tProcessing the certificate exchange with broadcast key...\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter - \t\tProcessing the certificate exchange with broadcast key...\n");
 
 	// Carefully, with plenty of bounds checking, extract the contents of the payload in the component parts.
-	if(spi->shdr->payload_len >= sizeof(__be16))
+	if(ntohs(spi->shdr->payload_len) >= sizeof(__be16))
 	{
 		certificate_len = ntohs(*((__be16*) spi->payload));
-		printk(KERN_INFO "SUPERMAN: Netfilter - \t\tCertificate length: %u\n", certificate_len);
+		// printk(KERN_INFO "SUPERMAN: Netfilter - \t\tCertificate length: %u\n", certificate_len);
 
-		if(spi->shdr->payload_len >= sizeof(__be16) + certificate_len)
+		if(ntohs(spi->shdr->payload_len) >= sizeof(__be16) + certificate_len)
 		{
 			certificate = (unsigned char*)(spi->payload + sizeof(__be16));
 
-			if(spi->shdr->payload_len >= sizeof(__be16) + certificate_len + sizeof(__be16))
+			if(ntohs(spi->shdr->payload_len) >= sizeof(__be16) + certificate_len + sizeof(__be16))
 			{
 				broadcast_key_len = ntohs(*((__be16*) (spi->payload + sizeof(__be16) + certificate_len)));
-				printk(KERN_INFO "SUPERMAN: Netfilter - \t\tBroadcast Key length: %u\n", broadcast_key_len);
+				// printk(KERN_INFO "SUPERMAN: Netfilter - \t\tBroadcast Key length: %u\n", broadcast_key_len);
 
-				if(spi->shdr->payload_len >= sizeof(__be16) + certificate_len + sizeof(__be16) + broadcast_key_len)
+				if(ntohs(spi->shdr->payload_len) >= sizeof(__be16) + certificate_len + sizeof(__be16) + broadcast_key_len)
 				{
 					broadcast_key = (unsigned char*)(spi->payload + sizeof(__be16) + certificate_len + sizeof(__be16));
 					ReceivedSupermanCertificateExchangeWithBroadcastKey(spi->addr, certificate_len, certificate, broadcast_key_len, broadcast_key);
@@ -369,6 +368,7 @@ unsigned int hook_prerouting_removed_p2p(struct superman_packet_info* spi, bool 
 
 
 		// For all other packet types, we call their callback method, if we stole the packet.
+		if(spi->result != NF_STOLEN) spi->result = NF_ACCEPT;
 		spi->use_callback = true;
 	}
 
@@ -381,6 +381,7 @@ unsigned int hook_localout_add_e2e(struct superman_packet_info* spi, bool result
 	if(result)
 	{
 		// Call their callback method, if we stole the packet.
+		if(spi->result != NF_STOLEN) spi->result = NF_ACCEPT;
 		spi->use_callback = true;
 	}
 
@@ -399,6 +400,7 @@ unsigned int hook_localin_remove_e2e(struct superman_packet_info* spi, bool resu
 		else
 		{
 			// Call their callback method, if we stole the packet.
+			if(spi->result != NF_STOLEN) spi->result = NF_ACCEPT;
 			spi->use_callback = true;
 		}
 	}
@@ -412,6 +414,7 @@ unsigned int hook_postrouting_add_p2p(struct superman_packet_info* spi, bool res
 	if(result)
 	{
 		// Call their callback method, if we stole the packet.
+		if(spi->result != NF_STOLEN) spi->result = NF_ACCEPT;
 		spi->use_callback = true;
 	}
 
@@ -431,21 +434,28 @@ unsigned int hook_prerouting_post_sk_response(struct superman_packet_info* spi, 
 unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
 	struct superman_packet_info* spi;
-	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING)\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
 	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(in->ifindex))
+	{
+		// if(!is_valid_ip_packet(skb))
+		// 	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \tNot a valid IP packet.\n");
+		// else
+		// 	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \tInterface not found in interfaces table: %u.\n", in->ifindex);
+
 		return NF_ACCEPT;
+	}
 
 	// Construct a new SPI to handle this packet.
 	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
 
-	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \tPacket Received from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+	// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \tPacket Received from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 	// Deal with special case unencapsulated SUPERMAN packets which are not secured!
 	if(spi->shdr)
 	{
-		if(spi->shdr->payload_len > skb->len - (skb_transport_offset(skb) + sizeof(struct superman_header)))
+		if(ntohs(spi->shdr->payload_len) > skb->len - (skb_transport_offset(skb) + sizeof(struct superman_header)))
 		{
 			printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tSuperman packet failed initial basic sanity check.\n");
 			spi->result = NF_DROP;
@@ -455,15 +465,15 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 		switch(spi->shdr->type)
 		{
 			case SUPERMAN_DISCOVERY_REQUEST_TYPE:			// It's a Discovery Request
-				printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tDiscovery Request Packet.\n");
-				ReceivedSupermanDiscoveryRequest(spi->addr, spi->shdr->payload_len, spi->payload, spi->shdr->timestamp, spi->skb->skb_iif);
+				// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tDiscovery Request Packet.\n");
+				ReceivedSupermanDiscoveryRequest(spi->addr, ntohs(spi->shdr->payload_len), spi->payload, spi->shdr->timestamp, spi->skb->skb_iif);
 				spi->result = NF_DROP;
 				return FreeSupermanPacketInfo(spi);
 				break;
 
 			case SUPERMAN_CERTIFICATE_REQUEST_TYPE:			// It's a Certificate Request
-				printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tCertificate Request Packet.\n");
-				ReceivedSupermanCertificateRequest(spi->addr, spi->shdr->payload_len, spi->payload, spi->shdr->timestamp, spi->skb->skb_iif);
+				// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tCertificate Request Packet.\n");
+				ReceivedSupermanCertificateRequest(spi->addr, ntohs(spi->shdr->payload_len), spi->payload, spi->shdr->timestamp, spi->skb->skb_iif);
 				spi->result = NF_DROP;
 				return FreeSupermanPacketInfo(spi);
 				break;
@@ -477,7 +487,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 		// If it the broadcast key we don't have, ditch the packet.
 		if(spi->use_broadcast_key)
 		{
-			printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tBroadcast packet but we don't have a broadcast key.\n");
+			// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tBroadcast packet but we don't have a broadcast key.\n");
 
 			spi->result = NF_DROP;
 			return FreeSupermanPacketInfo(spi);
@@ -485,7 +495,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 		// Otherwise queue the packet and send an SK request.
 		else
 		{
-			printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tWe don't have the the security details. Queuing packet and sending an SK Request.\n");
+			// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tWe don't have the the security details. Queuing packet and sending an SK Request.\n");
 
 			spi->result = NF_STOLEN;
 			EnqueuePacket(spi, &hook_prerouting_post_sk_response);
@@ -496,7 +506,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 
 	// For all other packet types, they must pass the hmac check!
 	// NOTE: The callback becomes responsible for clearing up the SPI.
-	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tRemoving P2P security...\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tRemoving P2P security...\n");
 	return RemoveP2PSecurity(spi, &hook_prerouting_removed_p2p);
 }
 
@@ -504,7 +514,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
 	struct superman_packet_info* spi;
-	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN)\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
 	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(in->ifindex))
@@ -513,7 +523,7 @@ unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 	// Construct a new SPI to handle this packet.
 	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
 
-	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 	return RemoveE2ESecurity(spi, &hook_localin_remove_e2e);
 }
@@ -536,7 +546,7 @@ unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
 	struct superman_packet_info* spi;
-	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT)\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
 	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(out->ifindex))
@@ -545,7 +555,7 @@ unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, c
 	// Construct a new SPI to handle this packet.
 	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
 
-	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 	if(!EncapsulatePacket(spi))
 	{
@@ -560,7 +570,7 @@ unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, c
 unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
 	struct superman_packet_info* spi;
-	printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING)\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
 	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(out->ifindex))
@@ -569,7 +579,7 @@ unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb
 	// Construct a new SPI to handle this packet.
 	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
 
-	printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+	// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 	// Deal with special case SUPERMAN packets which we leave alone (after all, we made them)!
 	if(spi->shdr)
@@ -577,22 +587,22 @@ unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb
 		switch(spi->shdr->type)
 		{
 			case SUPERMAN_DISCOVERY_REQUEST_TYPE:			// It's a Discovery Request
-				printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tDiscovery Request Packet.\n");
+				// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tDiscovery Request Packet.\n");
 				spi->result = NF_ACCEPT;
 				return FreeSupermanPacketInfo(spi);
 				break;
 			case SUPERMAN_CERTIFICATE_REQUEST_TYPE:			// It's a Certificate Request
-				printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tCertificate Request Packet.\n");
+				// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tCertificate Request Packet.\n");
 				spi->result = NF_ACCEPT;
 				return FreeSupermanPacketInfo(spi);
 				break;
 			case SUPERMAN_CERTIFICATE_EXCHANGE_TYPE:		// It's a Certificate Exchange
-				printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tCertificate Exchange Packet.\n");
+				// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tCertificate Exchange Packet.\n");
 				spi->result = NF_ACCEPT;
 				return FreeSupermanPacketInfo(spi);
 				break;
 			case SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE:		// It's a Certificate Exchange With Broadcast Key
-				printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tCertificate Exchange With Broadcast Key Packet.\n");
+				// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tCertificate Exchange With Broadcast Key Packet.\n");
 				spi->result = NF_ACCEPT;
 				return FreeSupermanPacketInfo(spi);
 				break;

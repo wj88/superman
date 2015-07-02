@@ -14,6 +14,8 @@
 
 #include "packet_info.h"
 
+void dump_packet(struct sk_buff* skb);
+
 bool UpdateBroadcastKey(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, bool overwrite);
 bool GetBroadcastKey(uint32_t* sk_len, unsigned char** sk);
 

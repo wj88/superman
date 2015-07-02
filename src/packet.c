@@ -41,7 +41,7 @@ unsigned int send_superman_packet(struct superman_packet_info* spi, bool result)
 		struct rtable* rt;
 		struct dst_entry *dst;
 
-		printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tRouting and sending to %u.%u.%u.%u...\n", 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+		// printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tRouting and sending to %u.%u.%u.%u...\n", 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 		ip_send_check(spi->iph);
 
@@ -82,12 +82,18 @@ bool EncapsulatePacket(struct superman_packet_info* spi)
 {
 	uint32_t iph_len;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tEncapsulating packet...\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \tEncapsulating packet...\n");
+
+	// printk(KERN_INFO "SUPERMAN: Packet - \tPacket before encapsulation...\n");
+	// dump_packet(spi->skb);
 
 	// Make sure we have enough headroom.
 	if(skb_headroom(spi->skb) < sizeof(struct superman_header))
 	{
 		struct sk_buff* nskb;
+
+		// printk(KERN_INFO "SUPERMAN: Packet - \t\tExpanding the packet to increase headroom...\n");
+
 		nskb = skb_copy_expand(spi->skb, sizeof(struct superman_header), skb_tailroom(spi->skb), GFP_ATOMIC);
 		if(nskb == NULL)
 		{
@@ -102,31 +108,42 @@ bool EncapsulatePacket(struct superman_packet_info* spi)
 		// Clean up the old one
 		kfree_skb(spi->skb);
 		spi->skb = nskb;
+
+		// printk(KERN_INFO "SUPERMAN: Packet - \t\tPacket after expansion...\n");
+		// dump_packet(spi->skb);
 	}
 
 	// Determine the IP header length
 	iph_len = ((struct iphdr*)skb_network_header(spi->skb))->ihl << 2;
 
 	// Allocate some of the headroom to our new header
-	skb_put(spi->skb, sizeof(struct superman_header));
+	skb_push(spi->skb, sizeof(struct superman_header));
+
+	// printk(KERN_INFO "SUPERMAN: Packet - \tPacket after skb_push...\n");
+	// dump_packet(spi->skb);
 
 	// Move the IP header to the start
-	memmove(spi->skb->data, spi->skb->data + iph_len, iph_len);
+	memmove(spi->skb->data, spi->skb->data + sizeof(struct superman_header), iph_len);
 
 	// Grab the new IP header reference
-	spi->iph = (struct iphdr*)spi->skb->data;
+	skb_reset_network_header(spi->skb);
+	skb_set_transport_header(spi->skb, iph_len);
+	spi->iph = (struct iphdr*)skb_network_header(spi->skb);
 
 	// Fill in the superman header
-	spi->shdr = (struct superman_header*)(spi->skb->data + iph_len);
-	spi->shdr->type = SUPERMAN_MAX_TYPE + spi->iph->protocol;				// We're preparing a superman packet.
-	spi->shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
-	spi->shdr->payload_len = spi->skb->len - iph_len - sizeof(struct superman_header);	// The payload length.	
+	spi->shdr = (struct superman_header*)skb_transport_header(spi->skb);
+	spi->shdr->type = SUPERMAN_MAX_TYPE + spi->iph->protocol;					// We're preparing a superman packet.
+	spi->shdr->timestamp = htons(0);								// This will be a unique counter value for each packet, cycling round.
+	spi->shdr->payload_len = htons(spi->skb->len - iph_len - sizeof(struct superman_header));	// The payload length.	
 
 	// Update the IP header
-	spi->iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
-	spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) + sizeof(struct superman_header));	// Update the IP packet length
-	spi->iph->check = 0;									// No checksum yet
+	spi->iph->protocol = SUPERMAN_PROTOCOL_NUM;							// Our SUPERMAN protocol number
+	spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) + sizeof(struct superman_header));		// Update the IP packet length
+	spi->iph->check = 0;										// No checksum yet
 	ip_send_check(spi->iph);
+
+	// printk(KERN_INFO "SUPERMAN: Packet - \tPacket after encapsulation...\n");
+	// dump_packet(spi->skb);
 
 	return true;
 }
@@ -135,26 +152,34 @@ bool DecapsulatePacket(struct superman_packet_info* spi)
 {
 	uint32_t iph_len;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tDecapsulating packet...\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \tDecapsulating packet...\n");
+
+	// printk(KERN_INFO "SUPERMAN: Packet - \tPacket before decapsulation...\n");
+	// dump_packet(spi->skb);
 
 	// Determine the IP header length
 	iph_len = ((struct iphdr*)skb_network_header(spi->skb))->ihl << 2;
 
 	// Update the IP header
-	spi->iph->protocol = spi->iph->protocol - SUPERMAN_PROTOCOL_NUM;			// Our SUPERMAN protocol number
+	spi->iph->protocol = spi->shdr->type - SUPERMAN_MAX_TYPE;				// Our SUPERMAN protocol number
 	spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) - sizeof(struct superman_header));	// Update the IP packet length
 	spi->iph->check = 0;									// No checksum yet
 
 	// Move the IP header inward to sit next to the payload
-	memmove(spi->skb->data + iph_len, spi->skb->data, iph_len);
+	memmove(spi->skb->data + sizeof(struct superman_header), spi->skb->data, iph_len);
 
 	// Remove the space at the start of the data, back into the headroom
 	skb_pull(spi->skb, sizeof(struct superman_header));
 
 	// Update our pointers
+	skb_reset_network_header(spi->skb);
+	skb_set_transport_header(spi->skb, iph_len);
+	spi->iph = (struct iphdr*)skb_network_header(spi->skb);
 	spi->shdr = NULL;
-	spi->iph = (struct iphdr*)spi->skb->data;
 	ip_send_check(spi->iph);
+
+	// printk(KERN_INFO "SUPERMAN: Packet - \tPacket after decapsulation...\n");
+	// dump_packet(spi->skb);
 
 	return true;
 }
@@ -163,7 +188,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 {
 	struct net_device *dev;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSend Discovery Request...\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Discovery Request...\n");
 	
 	INTERFACE_ITERATOR_START(dev)
 
@@ -173,7 +198,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	void* payload;
 	struct superman_packet_info* spi;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSend Discovery Request on %s...\n", dev->name);
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Discovery Request on %s...\n", dev->name);
 
 	// Allocate a new packet
 	tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sk_len, GFP_KERNEL);
@@ -203,8 +228,8 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_DISCOVERY_REQUEST_TYPE;					// We're preparing a discovery request packet.
-	shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
-	shdr->payload_len = sk_len;							// A discovery request contains an SK.
+	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->payload_len = htons(sk_len);						// A discovery request contains an SK.
 
 	// Setup the IP header
 	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -226,7 +251,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	send_superman_packet(spi, true);
 
 	INTERFACE_ITERATOR_END
-	printk(KERN_INFO "SUPERMAN: Packet - \t... Send Discovery Request done.\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send Discovery Request done.\n");
 }
 
 void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char* sk)
@@ -240,7 +265,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	void* payload;
 	struct superman_packet_info* spi;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Request to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Request to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
 
 	// Grab some information about the interface.
 	if(!GetSecurityTableEntry(addr, &ste))
@@ -285,8 +310,8 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_REQUEST_TYPE;					// We're preparing a certificate request packet.
-	shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
-	shdr->payload_len = sk_len;							// A certificate request contains an SK.
+	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->payload_len = htons(sk_len);						// A certificate request contains an SK.
 
 	// Setup the IP header
 	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -308,7 +333,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	
 	// Dereference the device.
 	dev_put(dev);
-	printk(KERN_INFO "SUPERMAN: Packet - \t... Send Certificate Request done.\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send Certificate Request done.\n");
 }
 
 void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsigned char* certificate)
@@ -322,7 +347,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	void* payload;
 	struct superman_packet_info* spi;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Exchange to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Exchange to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
 
 	// Grab some information about the interface.
 	if(!GetSecurityTableEntry(addr, &ste))
@@ -368,8 +393,8 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_EXCHANGE_TYPE;				// We're preparing a certificate exchange packet.
-	shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
-	shdr->payload_len = certificate_len + sizeof(__be16);				// A certificate exchange contains a certificate.
+	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->payload_len = htons(certificate_len + sizeof(__be16));			// A certificate exchange contains a certificate.
 
 	// Setup the IP header
 	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -392,7 +417,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 
 	// Dereference the device.
 	dev_put(dev);
-	printk(KERN_INFO "SUPERMAN: Packet - \t... Send Certificate Exchange done.\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send Certificate Exchange done.\n");
 }
 
 void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key)
@@ -406,7 +431,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	void* payload;
 	struct superman_packet_info* spi;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Exchange With Broadcast Key to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Exchange With Broadcast Key to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
 	// printk(KERN_INFO "SUPERMAN: Packet - \tCertificate len: %u, Broadcast Key len: %u.\n", certificate_len, broadcast_key_len);
 
 	// Grab some information about the interface.
@@ -455,8 +480,8 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE;		// We're preparing a certificate exchange with broadcast key packet.
-	shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
-	shdr->payload_len = certificate_len + sizeof(__be16) + broadcast_key_len + sizeof(__be16);	// A certificate exchange with broadcast key contains a certificate and broadcast key.
+	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->payload_len = htons(certificate_len + sizeof(__be16) + broadcast_key_len + sizeof(__be16));	// A certificate exchange with broadcast key contains a certificate and broadcast key.
 
 	// Setup the IP header
 	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -478,7 +503,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 
 	// Dereference the device.
 	dev_put(dev);
-	printk(KERN_INFO "SUPERMAN: Packet - \t... Send Certificate Exchange With Broadcast Key done.\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send Certificate Exchange With Broadcast Key done.\n");
 }
 
 void SendAuthenticatedSKRequestPacket(uint32_t addr)
@@ -499,7 +524,7 @@ void SendInvalidateSKPacket(uint32_t addr)
 	void* payload;
 	struct superman_packet_info* spi;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSend SK Invalidate...\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend SK Invalidate...\n");
 
 	// Allocate a new packet
 	tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sizeof(addr), GFP_KERNEL);
@@ -528,8 +553,8 @@ void SendInvalidateSKPacket(uint32_t addr)
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_SK_INVALIDATE_TYPE;					// We're preparing an SK invalidate packet.
-	shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
-	shdr->payload_len = sizeof(addr);						// An SK invalidate contains an address.
+	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->payload_len = htons(sizeof(addr));					// An SK invalidate contains an address.
 
 	// Setup the IP header
 	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -550,7 +575,7 @@ void SendInvalidateSKPacket(uint32_t addr)
 	AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	INTERFACE_ITERATOR_END
-	printk(KERN_INFO "SUPERMAN: Packet - \t... Send SK Invalidate done.\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send SK Invalidate done.\n");
 }
 
 
@@ -567,7 +592,7 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	void* payload;
 	struct superman_packet_info* spi;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSend SK Invalidate...\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend SK Invalidate...\n");
 
 	// Allocate a new packet
 	tx_sk = alloc_skb(sizeof(struct iphdr) + sizeof(struct superman_header) + sizeof(__be16) + broadcast_key_len, GFP_KERNEL);
@@ -597,8 +622,8 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_SK_INVALIDATE_TYPE;					// We're preparing a broadcast key exchange packet.
-	shdr->timestamp = ntohs(0);							// This will be a unique counter value for each packet, cycling round.
-	shdr->payload_len = sizeof(__be16) + broadcast_key_len;				// A broadcast key exchange packet contains a broadcast key.
+	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->payload_len = htons(sizeof(__be16) + broadcast_key_len);			// A broadcast key exchange packet contains a broadcast key.
 
 	// Setup the IP header
 	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -619,7 +644,7 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	INTERFACE_ITERATOR_END
-	printk(KERN_INFO "SUPERMAN: Packet - \t... Send Broadcast Key Exchange done.\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send Broadcast Key Exchange done.\n");
 }
 
 #endif

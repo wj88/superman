@@ -171,7 +171,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 
 	if(GetSecurityTableEntry(daddr, &e))
 	{
-		printk(KERN_ERR "SUPERMAN: security_table - \t\tUpdating an existing entry...\n");
+		// printk(KERN_ERR "SUPERMAN: security_table - \t\tUpdating an existing entry...\n");
 		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
 		{
 			RemoveSecurityTableEntry(daddr);
@@ -183,7 +183,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 	}
 	else
 	{
-		printk(KERN_ERR "SUPERMAN: security_table - \t\tCreating a new entry...\n");
+		// printk(KERN_ERR "SUPERMAN: security_table - \t\tCreating a new entry...\n");
 		e = kmalloc(sizeof(struct security_table_entry), GFP_ATOMIC);
 		if (e == NULL) {
 			printk(KERN_ERR "security_table: \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");

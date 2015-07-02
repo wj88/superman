@@ -17,6 +17,7 @@
 #include "netlink.h"
 #include "security.h"
 
+
 struct option longopts[] = {
 	{ "ca_cert",	required_argument,	NULL,	'c' },
 	{ "node_cert",	required_argument,	NULL,	'n' },
@@ -200,13 +201,11 @@ void Run()
 {
 	// unsigned char* ifname = "eth0";
 	// unsigned int ifname_len = 5; // inc. null terminator
-
-	unsigned char* ifname = "lo";
-	unsigned int ifname_len = 3; // inc. null terminator
-
-	UpdateSupermanInterfaceTableEntry(ifname_len, ifname, true);
-
 	bool discoverySent = false;
+
+	UpdateSupermanInterfaceTableEntry(3, "lo", true);
+	UpdateSupermanInterfaceTableEntry(5, "eth0", true);
+
 
 	// Capture the time now.
 	time(&last_discovery_request);
@@ -239,7 +238,8 @@ void Run()
 		}
         }
 
-	UpdateSupermanInterfaceTableEntry(ifname_len, ifname, false);
+	UpdateSupermanInterfaceTableEntry(3, "lo", false);
+	UpdateSupermanInterfaceTableEntry(5, "eth0", false);
 }
 
 int main(int argc, char **argv)
