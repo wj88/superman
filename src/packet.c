@@ -56,7 +56,7 @@ unsigned int send_superman_packet(struct superman_packet_info* spi, bool result)
 			spi->skb->dev = dst->dev;
 
 			// printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tSending...\n");
-			dst->output(spi->skb);
+			dst->output(NULL, spi->skb);
 		}
 	}
 	else
