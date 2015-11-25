@@ -9,9 +9,9 @@
 openssl version
 
 # If older than 1.0.2, grab the latest, build it and install it.
-wget https://www.openssl.org/source/openssl-1.0.2a.tar.gz
-tar -xvzf openssl-1.0.2a.tar.gz
-cd openssl-1.0.2a
+wget https://www.openssl.org/source/openssl-1.0.2d.tar.gz
+tar -xvzf openssl-1.0.2d.tar.gz
+cd openssl-1.0.2d
 ./config --prefix=/usr/
 make
 sudo make install
@@ -26,10 +26,10 @@ sudo make install
 #
 
 # Create a CA private root key
-openssl genrsa -out CA_privatekey.pem 2048
+openssl genrsa -out ca_privatekey.pem 2048
 
 # Create a CA certificate
-openssl req -x509 -new -nodes -key CA_privatekey.pem -days 1024 -out CA_certificate.pem
+openssl req -x509 -new -nodes -subj "/C=UK/ST=London/L=Greenwich/O=University of Greenwich/OU=Faculty of Engineering and Science/CN=fes.gre.ac.uk" -key ca_privatekey.pem -days 1024 -out ca_certificate.pem
 
 # Generate DH parameters (1024 bits long safe prime, generator 2):
 openssl dhparam -out dh_params.pem 1024
@@ -77,14 +77,32 @@ openssl req -new -key node_rsa_privatekey.pem -out node_rsa_certreq.csr
 
 
 # With the certificate request and the DH public key, generate a DH certificate.
-openssl x509 -req -in node_rsa_certreq.csr -CAkey CA_privatekey.pem -CA CA_certificate.pem -force_pubkey node_dh_publickey.pem -out node_certificate.pem -CAcreateserial
+openssl x509 -req -in node_rsa_certreq.csr -CAkey ca_privatekey.pem -CA ca_certificate.pem -force_pubkey node_dh_publickey.pem -out node_certificate.pem -CAcreateserial
 
 #
 # Now copy the following back to the node:
-#	CA_certificate.pem
+#	ca_certificate.pem
 #	node_certificate.pem
 #
 
+
+# ----------------------------------------------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------------------------------------------
+
+#
+# Generate many certificates from an existing CA:
+#
+
+for i in {1..50}
+do
+openssl genpkey -paramfile dh_params.pem -out node-${i}_dh_privatekey.pem
+openssl pkey -in node-${i}_dh_privatekey.pem -pubout -out node-${i}_dh_publickey.pem
+openssl genrsa -out node-${i}_rsa_privatekey.pem 1024
+openssl req -new -subj "/C=UK/ST=London/L=Greenwich/O=University of Greenwich/OU=Faculty of Engineering and Science/CN=node${i}.fes.gre.ac.uk" -key node-${i}_rsa_privatekey.pem -out node-${i}_rsa_certreq.csr
+openssl x509 -req -in node-${i}_rsa_certreq.csr -CAkey ca_privatekey.pem -CA ca_certificate.pem -force_pubkey node-${i}_dh_publickey.pem -out node-${i}_certificate.pem -CAcreateserial
+done
 
 # ----------------------------------------------------------------------------------------------------------
 
@@ -114,6 +132,6 @@ openssl x509 -pubkey -noout -in node_certificate.pem -out node_publickey.pem
 #
 
 # To see the shared keys generated via DH
-./superman -c ../keys/CA_certificate.pem -n ../keys/node_certificate.pem -p ../keys/node_dh_privatekey.pem -t ../keys/test_certificate.pem
-./superman -c ../keys/CA_certificate.pem -n ../keys/test_certificate.pem -p ../keys/test_dh_privatekey.pem -t ../keys/node_certificate.pem
+./superman -c ../keys/ca_certificate.pem -n ../keys/node_certificate.pem -p ../keys/node_dh_privatekey.pem -t ../keys/test_certificate.pem
+./superman -c ../keys/ca_certificate.pem -n ../keys/test_certificate.pem -p ../keys/test_dh_privatekey.pem -t ../keys/node_certificate.pem
 
