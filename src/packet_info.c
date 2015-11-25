@@ -8,6 +8,17 @@
 static unsigned int superman_packet_info_count = 0;
 static unsigned int superman_packet_info_id_counter = 0;
 
+uint16_t GetNextTimestampFromSupermanPacketInfo(struct superman_packet_info* spi)
+{
+	if(spi->security_details != NULL)
+	{
+		if(spi->security_details->timestamp == 0xFFFF) spi->security_details->timestamp = 0;
+		spi->security_details->timestamp++;
+		return spi->security_details->timestamp;
+	}
+	return 0;
+}
+
 // A useful function shamelessly stolen from the AODV-UU implementation.
 static inline int if_info_from_net_device(struct in_addr *addr, struct in_addr *baddr, const struct net_device *dev)
 {

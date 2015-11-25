@@ -18,6 +18,18 @@ static LIST_HEAD(security_table_head);
 
 #define list_is_first(e) (&e->l == security_table_head.next)
 
+uint16_t GetNextTimestampFromSecurityTableEntry(uint32_t addr)
+{
+	struct security_table_entry* entry;
+	if(GetSecurityTableEntry(&entry))
+	{
+		if(entry->timestamp == 0xFFFF) entry->timestamp = 0;
+		entry->timestamp++;
+		return entry->timestamp;
+	}
+	return 0;
+}
+
 static inline void __security_table_flush(void)
 {
 	struct list_head *pos, *tmp;

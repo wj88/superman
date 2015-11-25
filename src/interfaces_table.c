@@ -131,7 +131,7 @@ bool AddInterfacesTableEntry(uint32_t ifindex)
 	}
 	else
 	{
-		printk(KERN_ERR "SUPERMAN: interfaces_table - \t\tCreating a new entry...\n");
+		// printk(KERN_ERR "SUPERMAN: interfaces_table - \t\tCreating a new entry...\n");
 		e = kmalloc(sizeof(struct interfaces_table_entry), GFP_ATOMIC);
 		if (e == NULL) {
 			printk(KERN_ERR "interfaces_table: \t\t\t\"Out Of Memory\" in AddInterfacesTableEntry\n");

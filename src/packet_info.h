@@ -64,6 +64,7 @@ struct superman_packet_info
 	uint32_t id;
 };
 
+uint16_t GetNextTimestampFromSupermanPacketInfo(struct superman_packet_info* spi);
 struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));
 unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi);
 

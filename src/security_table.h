@@ -15,9 +15,11 @@ struct security_table_entry {
 	unsigned char*	ske;
 	uint32_t	skp_len;
 	unsigned char*	skp;
-	int32_t		timestamp;
+	int16_t		timestamp;
 	int32_t		ifindex;
 };
+
+uint16_t GetNextTimestampFromSecurityTableEntry(uint32_t addr);
 
 bool InitSecurityTable(void);
 void DeInitSecurityTable(void);

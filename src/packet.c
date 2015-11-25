@@ -133,7 +133,7 @@ bool EncapsulatePacket(struct superman_packet_info* spi)
 	// Fill in the superman header
 	spi->shdr = (struct superman_header*)skb_transport_header(spi->skb);
 	spi->shdr->type = SUPERMAN_MAX_TYPE + spi->iph->protocol;					// We're preparing a superman packet.
-	spi->shdr->timestamp = htons(0);								// This will be a unique counter value for each packet, cycling round.
+	spi->shdr->timestamp = htons(GetNextTimestampFromSupermanPacketInfo(spi));			// This will be a unique counter value for each packet, cycling round.
 	spi->shdr->payload_len = htons(spi->skb->len - iph_len - sizeof(struct superman_header));	// The payload length.	
 
 	// Update the IP header
@@ -228,7 +228,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_DISCOVERY_REQUEST_TYPE;					// We're preparing a discovery request packet.
-	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(spi));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sk_len);						// A discovery request contains an SK.
 
 	// Setup the IP header
@@ -310,7 +310,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_REQUEST_TYPE;					// We're preparing a certificate request packet.
-	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = htons(GetNextTimestampFromSupermanPacketInfo(spi));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sk_len);						// A certificate request contains an SK.
 
 	// Setup the IP header
@@ -393,7 +393,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_EXCHANGE_TYPE;				// We're preparing a certificate exchange packet.
-	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = htons(GetNextTimestampFromSupermanPacketInfo(spi));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(certificate_len + sizeof(__be16));			// A certificate exchange contains a certificate.
 
 	// Setup the IP header
@@ -480,7 +480,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE;		// We're preparing a certificate exchange with broadcast key packet.
-	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = htons(GetNextTimestampFromSupermanPacketInfo(spi));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(certificate_len + sizeof(__be16) + broadcast_key_len + sizeof(__be16));	// A certificate exchange with broadcast key contains a certificate and broadcast key.
 
 	// Setup the IP header
@@ -553,7 +553,7 @@ void SendInvalidateSKPacket(uint32_t addr)
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_SK_INVALIDATE_TYPE;					// We're preparing an SK invalidate packet.
-	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = htons(GetNextTimestampFromSupermanPacketInfo(spi));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sizeof(addr));					// An SK invalidate contains an address.
 
 	// Setup the IP header
@@ -622,7 +622,7 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_SK_INVALIDATE_TYPE;					// We're preparing a broadcast key exchange packet.
-	shdr->timestamp = htons(0);							// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = htons(GetNextTimestampFromSupermanPacketInfo(spi));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sizeof(__be16) + broadcast_key_len);			// A broadcast key exchange packet contains a broadcast key.
 
 	// Setup the IP header
