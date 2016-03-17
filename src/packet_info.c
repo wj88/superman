@@ -8,6 +8,7 @@
 static unsigned int superman_packet_info_count = 0;
 static unsigned int superman_packet_info_id_counter = 0;
 
+/*
 uint16_t GetNextTimestampFromSupermanPacketInfo(struct superman_packet_info* spi)
 {
 	if(spi->security_details != NULL)
@@ -18,6 +19,7 @@ uint16_t GetNextTimestampFromSupermanPacketInfo(struct superman_packet_info* spi
 	}
 	return 0;
 }
+*/
 
 // A useful function shamelessly stolen from the AODV-UU implementation.
 static inline int if_info_from_net_device(struct in_addr *addr, struct in_addr *baddr, const struct net_device *dev)
@@ -59,7 +61,7 @@ static inline int if_info_from_net_device(struct in_addr *addr, struct in_addr *
 	return found;
 }
 
-struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	++superman_packet_info_count;
@@ -74,11 +76,9 @@ struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, stru
 	}
 
 	// Information provided by the hook function where the SPI originated.
-	spi->hooknum = hooknum;
+	spi->ops = ops;
 	spi->skb = skb;
-	spi->in = in;
-	spi->out = out;
-	spi->okfn = okfn;
+	spi->state = state;
 
 	// Useful pointers to the relevant parts of the packet.
 	spi->iph = ip_hdr(skb);				// We can grab the IP header
@@ -96,22 +96,22 @@ struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, stru
 	// Address information about the origin/destination of this packet.
 	memset(&spi->ifaddr, 0, sizeof(struct in_addr));
 	memset(&spi->bcaddr, 0, sizeof(struct in_addr));
-	if(spi->hooknum == NF_INET_PRE_ROUTING || spi->hooknum == NF_INET_LOCAL_IN)
+	if(spi->ops != NULL && (spi->ops->hooknum == NF_INET_PRE_ROUTING || spi->ops->hooknum == NF_INET_LOCAL_IN))
 	{
-		if(spi->in != NULL)
-			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->in);
+		if(spi->state->in != NULL)
+			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->state->in);
 		spi->addr = spi->iph->saddr;
 	}
-	else if(spi->hooknum == NF_INET_POST_ROUTING || spi->hooknum == NF_INET_LOCAL_OUT || spi->hooknum == NF_INET_FORWARD)
+	else if(spi->ops != NULL && (spi->ops->hooknum == NF_INET_POST_ROUTING || spi->ops->hooknum == NF_INET_LOCAL_OUT || spi->ops->hooknum == NF_INET_FORWARD))
 	{
-		if(spi->out != NULL)
-			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->out);
+		if(spi->state->out != NULL)
+			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->state->out);
 		spi->addr = spi->iph->daddr;
 	}
 	else
 		spi->addr = 0;
 
-	// Address information about the origin/destination of this packet.
+	// Address information about the origin/destination of this packet.	
 	if(spi->ifaddr.s_addr == spi->addr)
 		spi->addr_type = IS_MYADDR;
 	else if(ipv4_is_loopback(spi->addr))
@@ -123,13 +123,21 @@ struct superman_packet_info* MallocSupermanPacketInfo(unsigned int hooknum, stru
 	else
 		spi->addr_type = IS_OTHER;
 
+	// Deal with the special case of SK requests
+	if(spi->shdr != NULL && spi->shdr->type == SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE)
+		spi->addr_type = IS_BROADCAST;
+
 	// Security information
 	switch(spi->addr_type)
 	{
 		case IS_MYADDR:
 		case IS_LOOPBACK:
 			// printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is from me or is a loopback packet.\n");
+#ifdef ENCRYPT_LOCAL
+			spi->secure_packet = true;
+#else
 			spi->secure_packet = false;
+#endif
 			break;
 		case IS_MULTICAST:
 		case IS_BROADCAST:
@@ -175,10 +183,10 @@ unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi)
 
 	if(spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)
 	{
-		if(spi->okfn != NULL)
+		if(spi->state != NULL && spi->state->okfn != NULL)
 		{
 			printk(KERN_INFO "SUPERMAN: packet_info: \tCalling the OK function because we stole the packet...\n");
-			spi->okfn(spi->skb);
+			spi->state->okfn(spi->state->sk, spi->skb);
 		}
 	}
 	else if(!spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)

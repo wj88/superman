@@ -10,6 +10,9 @@
 // Use a test protocol number
 #define SUPERMAN_PROTOCOL_NUM 253
 
+// Comment the next line if local comms should not be encrypted
+#define ENCRYPT_LOCAL
+
 #else
 
 #include <stdio.h>

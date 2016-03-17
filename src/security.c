@@ -95,20 +95,35 @@ bool UpdateBroadcastKey(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, un
 
 	// If we already have a valid entry and we're not being asked to overwrite it.
 	if(!overwrite && GetSecurityTableEntry(INADDR_BROADCAST, &entry) && entry->flag >= 3)
+	{
+		printk(KERN_INFO "Security:\tUpdateBroadcastKey - not overwriting, entry exists.\n");
 		return true;
+	}
 
 	// Determine whether we have an sk.
 	if(sk_len > 0 && sk != NULL)
 	{
+		printk(KERN_INFO "Security:\tUpdateBroadcastKey - sk provided.\n");
+
 		// Do we also have ske and skp?
 		if(ske_len > 0 && skp_len > 0 && ske != NULL && skp != NULL)
+		{
 			flag = 3;
+			printk(KERN_INFO "Security:\tUpdateBroadcastKey - ske and skp provided.\n");
+		}
 		else
+		{
 			flag = 2;
+			printk(KERN_INFO "Security:\tUpdateBroadcastKey - ske and skp not provided.\n");
+		}
 	}
 	else
+	{
 		flag = 0;
+		printk(KERN_INFO "Security:\tUpdateBroadcastKey - sk not provided.\n");
+	}
 
+	printk(KERN_INFO "Security:\tUpdateBroadcastKey - requesting to update the security table entry.\n");
 	return UpdateOrAddSecurityTableEntry(INADDR_BROADCAST, flag, sk_len, sk, ske_len, ske, skp_len, skp, 0, 0);
 }
 
@@ -248,11 +263,11 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	int sglists;
 	struct aead_request *req;
 
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tAdding E2E security...\n");
+	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tAdding E2E security...\n");
 
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tPacket contents:\n");
-	// dump_packet(spi->skb);
+	dump_packet(spi->skb);
 
 	// If we don't need to secure this packet, accept it.
 	if(!spi->secure_packet)
@@ -269,6 +284,8 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
+
+	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tKey len: %u, Key %u, err: %d, flags: %x.\n", spi->security_details->ske_len, (uint32_t)(spi->security_details->ske), err, crypto_aead_get_flags(aead));
 
 	// We have a key to use, load it into the crypto process.
 	err = crypto_aead_setkey(aead, spi->security_details->ske, spi->security_details->ske_len);
@@ -371,6 +388,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	spi->arg = callback;
 
 	// Attempt to perform the decrypt process.
+	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tCalling crypto_aead_encrypt...\n");
 	err = crypto_aead_encrypt(req);
 
 	// If we're told it's in progress, it is being performed asyncronously... steal the packet.
@@ -382,7 +400,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	// Crypto finished immediately, go straight to the end. 
 	else
 	{
-		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tCrypto is running syncronously...\n");
+		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tCrypto is running syncronously...\n");
 		spi->arg = NULL;
 		spi->result = AddE2ESecurityDone(spi, callback, err);
 	}
@@ -685,7 +703,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	struct ahash_request *req;
 	struct sk_buff* trailer;
 
-	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tAdding P2P security...\n");
+	printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tAdding P2P security...\n");
 
 	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - \t\tPacket contents:\n");
@@ -1014,14 +1032,18 @@ void DeInitSecurity(void)
 
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#include <openssl/rand.h>
 #include <openssl/x509.h>
 #include <openssl/x509_vfy.h>
 
 #include "security.h"
+#include "netlink.h"
 
 uint32_t	ca_cert_data_len		= 0;
 unsigned char*	ca_cert_data			= NULL;
@@ -1559,6 +1581,33 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 	else
 	{
 		printf("Security: ...key match.\n");
+	}
+
+	// In userspace, we don't know if the kernel has a broadcast key.
+	uint32_t bk_len;
+	unsigned char* bk;
+	printf("Security: \tGenerating a new broadcast key (just in case the kernel doesn't have one yet)...\n");
+	if(MallocAndGenerateNewKey(&bk_len, &bk))
+	{
+		uint32_t ske_len;
+		unsigned char* ske;
+		uint32_t skp_len;
+		unsigned char* skp;
+
+		printf("Security: \tGenerating SKE and SKP for the new broadcast key (again, just in case)...\n");
+		if(MallocAndGenerateSharedkeys(bk_len, bk, &ske_len, &ske, &skp_len, &skp))
+		{
+			printf("Security: \tUpdating the new broadcast key (again, just in case)...\n");
+			UpdateSupermanBroadcastKey(bk_len, bk, ske_len, ske, skp_len, skp, false);
+			free(ske);
+			ske = NULL;
+			free(skp);
+			skp = NULL;
+		}
+		else
+			printf("Security: \tFailed to generate SKE and SKP from the new broadcast key.\n");
+		free(bk);
+		bk = NULL;			
 	}
 
 	//printf("Security: Testing shared secret generator...\n");

@@ -16,7 +16,7 @@
 #include "queue.h"
 
 #define HOOK_DEF(func_name, ops_name, hook_num)																	\
-unsigned int func_name(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *));		\
+unsigned int func_name(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state);		\
 static struct nf_hook_ops ops_name = {																		\
 	.owner      	= THIS_MODULE,																		\
 	.hook 		= func_name,																		\
@@ -286,8 +286,58 @@ unsigned int process_certificate_exchange_with_broadcast_key_packet(struct super
 	return FreeSupermanPacketInfo(spi);
 }
 
+unsigned int process_authenticated_sk_request(struct superman_packet_info* spi)
+{
+	uint32_t origin;
+	uint32_t target;
+	struct security_table_entry* security_details;
+
+	printk(KERN_INFO "SUPERMAN: Netfilter - SK Request Packet.\n");
+
+	origin = *((uint32_t*)(spi->payload));
+	target = *((uint32_t*)(spi->payload + sizeof(uint32_t)));
+
+	// If we don't have it, we can request it too.
+	if(!GetSecurityTableEntry(target, &security_details))
+		SendAuthenticatedSKRequestPacket(origin, target);
+
+	// Otherwise, we can share the answer we already have.
+	else
+		SendAuthenticatedSKResponsePacket(origin, target, security_details->sk_len, security_details->sk);
+
+	spi->result = NF_DROP;				// Don't let an Authenticated SK Request propogate higher up the stack
+	return FreeSupermanPacketInfo(spi);
+}
+
+unsigned int process_authenticated_sk_response(struct superman_packet_info* spi)
+{
+	uint32_t origin;
+	uint32_t target;
+	struct security_table_entry* security_details;
+	uint32_t sk_len;
+	unsigned char* sk;
+
+	printk(KERN_INFO "SUPERMAN: Netfilter - SK Request Packet.\n");
+
+	sk_len = (uint32_t)(ntohs(*((__be16*)spi->payload)));
+	sk = (unsigned char*)(spi->payload + sizeof(__be16));
+	origin = *((uint32_t*)(spi->payload + sizeof(__be16) + sk_len));
+	target = *((uint32_t*)(spi->payload + sizeof(__be16) + sk_len + sizeof(uint32_t)));
+
+	// Grab a copy if we don't have it already.
+	if(!GetSecurityTableEntry(target, &security_details))
+		ReceivedSupermanAuthenticatedSKResponse(origin, sk_len, sk, spi->shdr->timestamp, spi->skb->skb_iif);
+
+	// Pass on the answer.
+	SendAuthenticatedSKResponsePacket(origin, target, sk_len, sk);
+
+	spi->result = NF_DROP;				// Don't let an Authenticated SK Request propogate higher up the stack
+	return FreeSupermanPacketInfo(spi);
+}
+
 unsigned int hook_prerouting_removed_e2e(struct superman_packet_info* spi, bool result)
 {
+
 	// NOTE: We need to free our spi.
 	if(result)
 	{
@@ -338,6 +388,9 @@ unsigned int hook_prerouting_removed_p2p(struct superman_packet_info* spi, bool 
 					spi->security_flag = 2;
 					//return process_certificate_exchange_with_broadcast_key_packet(spi);
 					return RemoveE2ESecurity(spi, &hook_prerouting_removed_e2e);
+					break;
+				case SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE:				// It's an SK Request
+					return process_authenticated_sk_request(spi);
 					break;
 			}
 		}
@@ -430,14 +483,22 @@ unsigned int hook_prerouting_post_sk_response(struct superman_packet_info* spi, 
 		return FreeSupermanPacketInfo(spi);
 }
 
+unsigned int hook_localout_post_sk_response(struct superman_packet_info* spi, bool result)
+{
+	if(result)
+		return AddE2ESecurity(spi, &hook_localout_add_e2e);
+	else
+		return FreeSupermanPacketInfo(spi);
+}
+
 // After sanity checks, before routing decisions.
-unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
-	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(in->ifindex))
+	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(state->in->ifindex))
 	{
 		// if(!is_valid_ip_packet(skb))
 		// 	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \tNot a valid IP packet.\n");
@@ -448,7 +509,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 	}
 
 	// Construct a new SPI to handle this packet.
-	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
+	spi = MallocSupermanPacketInfo(ops, skb, state);
 
 	// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \tPacket Received from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
@@ -482,7 +543,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 
 	// Do we have the required security details of the source to remove
 	// the P2P... if not we must queue up the packet and request them.
-	if(!spi->has_security_details)
+	if(spi->secure_packet && !spi->has_security_details)
 	{
 		// If it the broadcast key we don't have, ditch the packet.
 		if(spi->use_broadcast_key)
@@ -499,7 +560,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 
 			spi->result = NF_STOLEN;
 			EnqueuePacket(spi, &hook_prerouting_post_sk_response);
-			SendAuthenticatedSKRequestPacket(spi->addr);
+			SendAuthenticatedSKRequestPacket(0, spi->addr);
 			return spi->result;
 		}
 	}
@@ -511,19 +572,19 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 }
 
 // After sanity checks, before routing decisions.
-unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN)\n");
 
+	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - \tfrom %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+
 	// Let non-IP packets and those of interfaces we're not monitoring.
-	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(in->ifindex))
+	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(state->in->ifindex))
 		return NF_ACCEPT;
 
 	// Construct a new SPI to handle this packet.
-	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
-
-	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+	spi = MallocSupermanPacketInfo(ops, skb, state);
 
 	return RemoveE2ESecurity(spi, &hook_localin_remove_e2e);
 }
@@ -531,7 +592,7 @@ unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 /*
 
 // After sanity checks, before routing decisions.
-unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	//if(is_valid_ip_packet(skb) && is_superman_packet(skb))
 		return NF_ACCEPT;
@@ -543,19 +604,27 @@ unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 
 
 // After sanity checks, before routing decisions.
-unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
-	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(out->ifindex))
+	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(state->out->ifindex))
 		return NF_ACCEPT;
 
 	// Construct a new SPI to handle this packet.
-	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
+	spi = MallocSupermanPacketInfo(ops, skb, state);
 
 	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+
+	// If this isn't an SK request, we'll need to encapsulate.
+	if(spi->shdr != NULL && spi->shdr->type == SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE)
+	{
+		printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - Letting through an SK Request.\n");
+		spi->result = NF_ACCEPT;
+		return FreeSupermanPacketInfo(spi);
+	}
 
 	if(!EncapsulatePacket(spi))
 	{
@@ -563,21 +632,45 @@ unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, c
 		return FreeSupermanPacketInfo(spi);
 	}
 
+	// Do we have the required security details of the source to remove
+	// the P2P... if not we must queue up the packet and request them.
+	if(spi->secure_packet && !spi->has_security_details)
+	{
+		// If it the broadcast key we don't have, ditch the packet.
+		if(spi->use_broadcast_key)
+		{
+			// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tBroadcast packet but we don't have a broadcast key.\n");
+
+			spi->result = NF_DROP;
+			return FreeSupermanPacketInfo(spi);
+		}
+		// Otherwise queue the packet and send an SK request.
+		else
+		{
+			// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tWe don't have the the security details. Queuing packet and sending an SK Request.\n");
+
+			spi->result = NF_STOLEN;
+			EnqueuePacket(spi, &hook_localout_post_sk_response);
+			SendAuthenticatedSKRequestPacket(0, spi->addr);
+			return spi->result;
+		}
+	}
+
 	return AddE2ESecurity(spi, &hook_localout_add_e2e);
 }
 
 // After sanity checks, before routing decisions.
-unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
-	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(out->ifindex))
+	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(state->out->ifindex))
 		return NF_ACCEPT;
 
 	// Construct a new SPI to handle this packet.
-	spi = MallocSupermanPacketInfo(ops->hooknum, skb, in, out, okfn);
+	spi = MallocSupermanPacketInfo(ops, skb, state);
 
 	// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
@@ -606,9 +699,11 @@ unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb
 				spi->result = NF_ACCEPT;
 				return FreeSupermanPacketInfo(spi);
 				break;
+			case SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE:
+				printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - Seen an SK Request.\n");
+				break;
 		}
 	}
-
 
 	return AddP2PSecurity(spi, &hook_postrouting_add_p2p);
 }

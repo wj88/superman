@@ -1,5 +1,6 @@
 ifeq ($(KERNELRELEASE),)
 
+#KBUILD_CFLAGS := $KBUILD_CFLAGS -fno-stack-protector
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 

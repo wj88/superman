@@ -1,0 +1,46 @@
+#!/bin/sh
+
+supermanid=$1
+
+echo Configuring network settings...
+sleep 2
+echo superman-${supermanid} >/etc/hostname
+/bin/hostname -F /etc/hostname
+sed -i "s/^address.*$/address 10.0.0.${supermanid}/g" /etc/network/interfaces
+ifup eth0
+
+case $supermanid in
+1)
+	ip route add 10.0.0.2 dev eth0
+	ip route add 10.0.0.3 via 10.0.0.2
+	;;
+2)
+	ip route add 10.0.0.2 dev eth0
+	ip route add 10.0.0.3 via 10.0.0.2
+	;;
+3)
+	ip route add 10.0.0.2 dev eth0
+	ip route add 10.0.0.3 via 10.0.0.2
+	;;
+esac
+
+echo 1 >/proc/sys/net/ipv4/ip_forward
+
+
+
+echo Generating the nodes certificate...
+openssl genpkey -paramfile /etc/superman/dh_params.pem -out /etc/superman/superman-${supermanid}_dh_privatekey.pem
+openssl pkey -in /etc/superman/superman-${supermanid}_dh_privatekey.pem -pubout -out /etc/superman/superman-${supermanid}_dh_publickey.pem
+openssl genrsa -out /etc/superman/superman-${supermanid}_rsa_privatekey.pem 1024
+openssl req -new -subj "/C=UK/ST=London/L=Greenwich/O=University of Greenwich/OU=Faculty of Engineering and Science/CN=superman-${supermanid}.fes.gre.ac.uk" -key /etc/superman/superman-${supermanid}_rsa_privatekey.pem -out /etc/superman/superman-${supermanid}_rsa_certreq.csr
+openssl x509 -req -in /etc/superman/superman-${supermanid}_rsa_certreq.csr -CAkey /etc/superman/ca_privatekey.pem -CA /etc/superman/ca_certificate.pem -force_pubkey /etc/superman/superman-${supermanid}_dh_publickey.pem -out /etc/superman/superman-${supermanid}_certificate.pem
+
+
+
+echo Bringing up the SUPERMAN kernel module...
+modprobe superman
+
+echo Starting the SUPERMAN daemon...
+superman -c /etc/superman/ca_certificate.pem -n /etc/superman/superman-${supermanid}_certificate.pem -p /etc/superman/superman-${supermanid}_dh_privatekey.pem -d
+
+

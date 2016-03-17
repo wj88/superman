@@ -246,15 +246,16 @@ int main(int argc, char **argv)
 {
 	ProcessArgs(argc, argv);
 
-	printf("Main: Initialising security...\n");
-	if(!InitSecurity(ca_cert_filename, node_cert_filename, node_dh_privatekey_filename))
+	printf("Main: Initialising netlink...\n");
+	if(!InitNetlink())
 	{
 		exit(EXIT_FAILURE);
 	}
 
-	if(!InitNetlink())
+	printf("Main: Initialising security...\n");
+	if(!InitSecurity(ca_cert_filename, node_cert_filename, node_dh_privatekey_filename))
 	{
-		DeInitSecurity();
+		DeInitNetlink();
 		exit(EXIT_FAILURE);
 	}
 

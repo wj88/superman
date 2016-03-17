@@ -162,6 +162,7 @@ void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t sk_len, unsi
 			if(MallocAndCopyCertificate(&our_cert_len, &our_cert))
 			{
 
+				/*
 				// In userspace, we don't know if the kernel has a broadcast key.
 
 				uint32_t bk_len;
@@ -188,6 +189,7 @@ void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t sk_len, unsi
 				}
 				else
 					printf("Processor: \tFailed to generate a new broadcast key.\n");
+				*/
 
 				// Send the certificate exchange with the broadcast key. The broadcast key is in kernel memory.
 				printf("Processor: \tRequesting to send a certificate exchange with broadcast key...\n");
@@ -263,7 +265,7 @@ void ReceivedSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint3
 	}
 }
 
-void ReceivedSupermanAuthenticatedSKResponse(uint32_t address, uint32_t sk_len, unsigned char* sk)
+void ReceivedSupermanAuthenticatedSKResponse(uint32_t address, uint32_t sk_len, unsigned char* sk, int32_t timestamp, int32_t ifindex)
 {
 	uint32_t ske_len;
 	unsigned char* ske;
@@ -271,7 +273,7 @@ void ReceivedSupermanAuthenticatedSKResponse(uint32_t address, uint32_t sk_len, 
 	unsigned char* skp;
 	if(MallocAndDHAndGenerateSharedkeys(sk_len, sk, &ske_len, &ske, &skp_len, &skp))
 	{
-		UpdateSupermanSecurityTableEntry(address, 3, sk_len, sk, ske_len, ske, skp_len, skp, -1, -1);
+		UpdateSupermanSecurityTableEntry(address, 3, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex);
 		free(ske);
 		free(skp);
 	}

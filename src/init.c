@@ -25,18 +25,18 @@ int Init(void)
 			{
 				if(InitInterfacesTable())
 				{
-					if(InitSecurity())
+					if(InitNetlink())
 					{
-						if(InitNetlink())
+						if(InitSecurity())
 						{
 							if(InitNetFilter())
 							{
 								printk(KERN_INFO "SUPERMAN: module loaded successfully.\n");
 								return 0;
 							}
-							DeInitNetlink();
+							DeInitSecurity();
 						}
-						DeInitSecurity();
+						DeInitNetlink();
 					}
 					DeInitInterfacesTable();
 				}
