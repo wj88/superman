@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# init-premount script for kypton.
+
+PREREQS="udev mdadm"
+prereqs()
+{
+	echo $PREREQS
+}
+
+case $1 in
+# get pre-requisites
+prereqs)
+	prereqs
+	exit 0
+	;;
+esac
+
+. /scripts/functions
+
+# Load the kernel module
+# TODO
+
+#while [ ! -f /sys/class/net/eth0 ]; do
+#sleep 1
+#done
+sleep 2
+/bin/configure_node ${supermanid}
+
+# Stop here... ignoring the rest
+while :; do
+        echo "Ctrl-a,c then type quit to exit QEMU."
+#        exec setsid /bin/sh -c 'exec /bin/sh < /dev/ttyS0 > /dev/ttyS0 2>&1'
+        exec /bin/sh -c 'exec /bin/sh < /dev/ttyS0 > /dev/ttyS0 2>&1'
+done
+exit
+
+
+exit 0
