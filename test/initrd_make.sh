@@ -1,10 +1,34 @@
 #!/bin/bash
 
+PACKAGES="libnl-3-dev libnl-genl-3-dev"
+
+checkpackages()
+{
+	# Check through our package list to see if any
+	# need installing.
+	NEEDSINSTALL=0
+	for PACKAGE in $PACKAGES; do
+		dpkg -s $PACKAGE >/dev/null 2>/dev/null
+		if [ $? -ne 0 ]; then
+			NEEDSINSTALL=1
+		fi
+	done
+	# If Any require installation, start the install process.
+	if [ $NEEDSINSTALL -ne 0 ]; then
+		echo -e "Installing prerequisite packages..."
+		sudo apt-get update
+		sudo apt-get -y install $PACKAGES
+	fi
+}
+
 if [[ ! -d ./initrd-prereqs ]]; then
 	echo Preparing prerequisits...
 	./prereq_install.sh
 	./openssl_make.sh --no-local
 fi
+
+# Install any prerequisite packages
+checkpackages
 
 echo Buidling the SUPERMAN kernel module...
 cd ../kernel-module

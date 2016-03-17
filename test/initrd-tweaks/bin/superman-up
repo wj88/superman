@@ -1,0 +1,3 @@
+#!/bin/sh
+
+insmod /lib/modules/$(uname -r)/kernel/net/superman/superman.ko

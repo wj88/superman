@@ -1,5 +1,7 @@
 #!/bin/bash
 
+PACKAGES="libc6 libnl-3-200 libnl-genl-3-200 libssl1.0.0 linux-image-`uname -r` openssl ifupdown"
+
 if [[ ! -d ./initrd-prereqs ]]; then
 	mkdir initrd-prereqs
 fi
@@ -10,28 +12,14 @@ fi
 cd pkgs
 
 echo Downloading the packages...
-apt-get download libc6
-#apt-get download hostname
-apt-get download libnl-3-200
-apt-get download libnl-genl-3-200
-apt-get download libssl1.0.0
-apt-get download linux-image-`uname -r`
-#apt-get download util-linux
-#apt-get download busybox-initramfs
-apt-get download openssl
-apt-get download ifupdown
+for PACKAGE in $PACKAGES; do
+	apt-get download ${PACKAGE}
+done
 
 echo Extracting the packages...
-dpkg-deb --extract `ls libc6*.deb` ../initrd-prereqs
-#dpkg-deb --extract `ls hostname*.deb` ../initrd-prereqs
-dpkg-deb --extract `ls libnl-3-200*.deb` ../initrd-prereqs
-dpkg-deb --extract `ls libnl-genl-3-200*.deb` ../initrd-prereqs
-dpkg-deb --extract `ls libssl1.0.0*.deb` ../initrd-prereqs
-dpkg-deb --extract `ls linux-image-*.deb` ../initrd-prereqs
-#dpkg-deb --extract `ls util-linux*.deb` ../initrd-prereqs
-#dpkg-deb --extract `ls busybox-initramfs*.deb` ../initrd-prereqs
-dpkg-deb --extract `ls openssl*.deb` ../initrd-prereqs
-dpkg-deb --extract `ls ifupdown*.deb` ../initrd-prereqs
+for PACKAGE in $PACKAGES; do
+	dpkg-deb --extract `ls ${PACKAGE}*.deb` ../initrd-prereqs
+done
 
 rm -R ../initrd-prereqs/boot
 rm -R ../initrd-prereqs/usr/share/doc
