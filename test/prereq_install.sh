@@ -1,32 +1,25 @@
 #!/bin/bash
 
-PACKAGES="libc6 libnl-3-200 libnl-genl-3-200 libssl1.0.0 linux-image-`uname -r` openssl ifupdown"
+. ./common.sh
 
-if [[ ! -d ./initrd-prereqs ]]; then
-	mkdir initrd-prereqs
-fi
+prereqInstall()
+{
+	local TARGET_PATH="$1"
+	local INCLUDE_DBG_SYMBOLS=N
+	local PACKAGES="libc6 libnl-3-200 libnl-genl-3-200 libssl1.0.0 linux-image-`uname -r` openssl"
+	
+	if [ "${INCLUDE_DBG_SYMBOLS}" = "Y" ]; then
+		PACKAGES="${PACKAGES} linux-image-$(uname -r)-dbgsym"
+		aptAddDbgSymbolsRepo
+	fi
 
-if [[ ! -d pkgs ]]; then
-	mkdir pkgs;
-fi
-cd pkgs
+	mkdir -p {${TARGET_PATH},pkgs}
 
-echo Downloading the packages...
-for PACKAGE in $PACKAGES; do
-	apt-get download ${PACKAGE}
-done
+	debDownload "${PACKAGES}" ./pkgs
+	debExtract "${PACKAGES}" ./pkgs ${TARGET_PATH}
 
-echo Extracting the packages...
-for PACKAGE in $PACKAGES; do
-	dpkg-deb --extract `ls ${PACKAGE}*.deb` ../initrd-prereqs
-done
+	echob Tidying up...
+	rm -R ${TARGET_PATH}/boot ${TARGET_PATH}/usr/share/doc pkgs
+}
 
-rm -R ../initrd-prereqs/boot
-rm -R ../initrd-prereqs/usr/share/doc
-
-rm *.deb
-cd ..
-rmdir pkgs
-
-
-
+[ "$0" = "$BASH_SOURCE" ] && prereqInstall ./initrd-prereqs
