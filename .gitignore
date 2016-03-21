@@ -9,6 +9,8 @@ kernel-module/*.ko
 kernel-module/*.mod.c
 test/initrd-prereqs/*
 test/initrd/*
+test/initrd
 test/openssl/*
+test/openssl
 test/initrd.img-custom
 daemon/superman
