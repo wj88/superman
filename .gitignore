@@ -1,0 +1,14 @@
+*~
+*.o
+*.o.cmd
+*.ko.cmd
+kernel-module/.tmp_versions/*
+kernel-module/Module.symvers
+kernel-module/modules.order
+kernel-module/*.ko
+kernel-module/*.mod.c
+test/initrd-prereqs/*
+test/initrd/*
+test/openssl/*
+test/initrd.img-custom
+daemon/superman
