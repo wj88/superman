@@ -202,6 +202,7 @@ void dump_packet(struct sk_buff* skb)
 unsigned int AddE2ESecurityDone(struct superman_packet_info* spi, unsigned int (*callback)(struct superman_packet_info*, bool), int err)
 {
 	bool result = false;
+	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone)...\n");
 	
 	if(err == 0)
 	{
@@ -238,6 +239,7 @@ static void addE2ESecurityDone(struct crypto_async_request *base, int err)
 {
 	struct superman_packet_info* spi = base->data;
 	unsigned int (*callback)(struct superman_packet_info*, bool) = spi->arg;
+	printk(KERN_INFO "SUPERMAN: Security (addE2ESecurityDone)...\n");
 	spi->arg = NULL;
 	AddE2ESecurityDone(spi, callback, err);
 }
@@ -259,20 +261,18 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	struct sk_buff* trailer;
 	uint8_t* tail;
 	struct scatterlist *sg;
-	struct scatterlist *asg;
-	int sglists;
 	struct aead_request *req;
 
-	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tAdding E2E security...\n");
+	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Adding E2E security...\n");
 
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
+	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tPacket contents:\n");
 	dump_packet(spi->skb);
 
 	// If we don't need to secure this packet, accept it.
 	if(!spi->secure_packet)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tNot a secured packet.\n");
+		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Not a secured packet.\n");
 		spi->result = NF_ACCEPT;
 		return NF_ACCEPT;
 	}
@@ -280,22 +280,22 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	// If we don't have the security details.
 	if(!spi->has_security_details)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tWe don't have their security details.\n");
+		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - We don't have their security details.\n");
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
-
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tKey len: %u, Key %u, err: %d, flags: %x.\n", spi->security_details->ske_len, (uint32_t)(spi->security_details->ske), err, crypto_aead_get_flags(aead));
 
 	// We have a key to use, load it into the crypto process.
 	err = crypto_aead_setkey(aead, spi->security_details->ske, spi->security_details->ske_len);
 	if(err < 0)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tFailed to set the security key");
-		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tKey len: %u, Key %u, err: %d, flags: %x.\n", spi->security_details->ske_len, (uint32_t)(spi->security_details->ske), err, crypto_aead_get_flags(aead));
+		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Failed to set the security key");
+		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key len: %u, Key %u, err: %d, flags: %x.\n", spi->security_details->ske_len, (uint32_t)(spi->security_details->ske), err, crypto_aead_get_flags(aead));
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
+
+	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key len: %u, Key %u, err: %d, flags: %x.\n", spi->security_details->ske_len, *(uint32_t*)(spi->security_details->ske), err, crypto_aead_get_flags(aead));
 
 	// Start with a zero checksum.
 	spi->iph->check = 0;
@@ -306,7 +306,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	// IV bytes len
 	iv_len = crypto_aead_ivsize(aead);
 	
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tRequested auth len: %u, Actual auth len: %u, IV len: %u\n", MAC_LEN, auth_len, iv_len);
+	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Requested auth len: %u, Actual auth len: %u, IV len: %u\n", MAC_LEN, auth_len, iv_len);
 
 	// Size of a single block
 	blksize = ALIGN(crypto_aead_blocksize(aead), 4);
@@ -317,7 +317,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	// Size of the padding added to make contents up to block size
 	padding_len = aligned_payload_len - ntohs(spi->shdr->payload_len);
 
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tBlock size: %u, Payload len: %u, Aligned Payload len: %u, Padding len: %u, Num blocks: %u\n", blksize, ntohs(spi->shdr->payload_len), aligned_payload_len, padding_len, aligned_payload_len / blksize);
+	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Block size: %u, Payload len: %u, Aligned Payload len: %u, Padding len: %u, Num blocks: %u\n", blksize, ntohs(spi->shdr->payload_len), aligned_payload_len, padding_len, aligned_payload_len / blksize);
 
 	// Size of the associated data
 	assoc_len = sizeof(struct iphdr) + sizeof(struct superman_header);
@@ -326,7 +326,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	nfrags = skb_cow_data(spi->skb, padding_len + auth_len, &trailer);
 	if(nfrags < 0)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tskb_cow_data failed.\n");
+		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - skb_cow_data failed.\n");
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
@@ -352,55 +352,50 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	// spi->skb->ip_summed = CHECKSUM_NONE;
 
 	// We need some temporary memory to store stuff. Allocate the memory then divide it up.
-	sglists = 1;
 	seqhilen = 0;
 
 	// Allocate some memory attached to spi->tmp to host the scatter list.
-	if(!alloc_tmp_e2e(spi, aead, nfrags + sglists, seqhilen))
+	if(!alloc_tmp_e2e(spi, aead, nfrags /* + sglists */, seqhilen))
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\talloc_tmp_e2e failed.\n");
+		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - alloc_tmp_e2e failed.\n");
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
 	seqhi = tmp_seqhi(spi->tmp);
 	iv = tmp_iv(aead, spi->tmp, seqhilen);
 	req = tmp_req(aead, iv);
-	asg = req_sg(aead, req);
-	sg = asg + sglists;
+	sg = req_sg(aead, req);
 
 	// Initialise the contents scatterlist with the number of fragments with have in our skb.
 	sg_init_table(sg, nfrags);
 
 	// Populate the contents scatterlist from the skb, offset from where the real payload data.
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tEncrypting %u bytes at offset %lu bytes...\n", aligned_payload_len, skb_transport_offset(spi->skb) + sizeof(struct superman_header));
-	skb_to_sgvec(spi->skb, sg, skb_transport_offset(spi->skb) + sizeof(struct superman_header), aligned_payload_len + auth_len);
+	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Encrypting %u bytes at offset %lu bytes with %u bytes of associated data...\n", aligned_payload_len, skb_transport_offset(spi->skb) + sizeof(struct superman_header), assoc_len);
 
-	// Initialise the associated data scatterlist with the header stuff (all of the headers).
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tAssociated data %u bytes...\n", assoc_len);
-	sg_init_one(asg, skb_network_header(spi->skb), assoc_len);
+	skb_to_sgvec(spi->skb, sg, skb_network_offset(spi->skb), assoc_len + aligned_payload_len + auth_len);
 
 	// Setup aead
 	aead_request_set_callback(req, 0, addE2ESecurityDone, spi);
 	aead_request_set_crypt(req, sg, sg, aligned_payload_len, iv);
-	aead_request_set_assoc(req, asg, assoc_len);
+	aead_request_set_ad(req, assoc_len);
 
 	// Pop the callback into the spi.
 	spi->arg = callback;
 
-	// Attempt to perform the decrypt process.
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tCalling crypto_aead_encrypt...\n");
+	// Attempt to perform the encrypt process.
+	printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Calling crypto_aead_encrypt...\n");
 	err = crypto_aead_encrypt(req);
 
 	// If we're told it's in progress, it is being performed asyncronously... steal the packet.
 	if (err == -EINPROGRESS)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tCrypto is running asyncronously, stealing packet...\n");
+		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Crypto is running asyncronously, stealing packet...\n");
 		spi->result = NF_STOLEN;
 	}	
 	// Crypto finished immediately, go straight to the end. 
 	else
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - \t\tCrypto is running syncronously...\n");
+		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Crypto is running syncronously...\n");
 		spi->arg = NULL;
 		spi->result = AddE2ESecurityDone(spi, callback, err);
 	}
@@ -470,7 +465,6 @@ static void removeE2ESecurityDone(struct crypto_async_request *base, int err)
 unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*callback)(struct superman_packet_info*, bool))
 {
 	int err;
-	// int i;
 	unsigned int auth_len;
 	unsigned int blksize;
 	unsigned int aligned_payload_len;
@@ -482,10 +476,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	__be32 *seqhi;
 	int seqhilen;
 	struct sk_buff* trailer;
-	//uint8_t* tail;
 	struct scatterlist *sg;
-	struct scatterlist *asg;
-	int sglists;
 	struct aead_request *req;
 
 /*
@@ -516,16 +507,16 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	-----------------------------------------------------------------
 */
 
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tRemoving E2E security...\n");
+	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Removing E2E security...\n");
 
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tPacket length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tPacket contents:\n");
+	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
+	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet contents:\n");
 	// dump_packet(spi->skb);
 
 	// If we don't need to secure this packet, accept it.
 	if(!spi->secure_packet)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tNot a secured packet.\n");
+		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Not a secured packet.\n");
 		spi->result = NF_ACCEPT;
 		return NF_ACCEPT;
 	}
@@ -533,7 +524,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	// If we don't have the security details.
 	if(!spi->has_security_details)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tWe don't have their security details.\n");
+		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - We don't have their security details.\n");
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
@@ -541,7 +532,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	// We have a key to use, load it into the crypto process.
 	if(crypto_aead_setkey(aead, spi->security_details->ske, spi->security_details->ske_len) < 0)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tFailed to set the security key.\n");
+		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Failed to set the security key.\n");
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
@@ -549,14 +540,13 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	// Start with a zero checksum.
 	spi->iph->check = 0;
 
-
 	// Auth bytes len
 	auth_len = crypto_aead_authsize(aead);
 
 	// IV bytes len
 	iv_len = crypto_aead_ivsize(aead);
 	
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tRequested auth len: %u, Actual auth len: %u, IV len: %u\n", MAC_LEN, auth_len, iv_len);
+	printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Requested auth len: %u, Actual auth len: %u, IV len: %u\n", MAC_LEN, auth_len, iv_len);
 
 	// Size of a single block
 	blksize = ALIGN(crypto_aead_blocksize(aead), 4);
@@ -567,7 +557,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	// Size of the padding added to make contents up to block size
 	padding_len = aligned_payload_len - ntohs(spi->shdr->payload_len);
 
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tBlock size: %u, Payload len: %u, Aligned Payload len: %u, Padding len: %u, Num blocks: %u\n", blksize, ntohs(spi->shdr->payload_len), aligned_payload_len, padding_len, aligned_payload_len / blksize);
+	printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Block size: %u, Payload len: %u, Aligned Payload len: %u, Padding len: %u, Num blocks: %u\n", blksize, ntohs(spi->shdr->payload_len), aligned_payload_len, padding_len, aligned_payload_len / blksize);
 
 	// Size of the associated data
 	assoc_len = sizeof(struct iphdr) + sizeof(struct superman_header);
@@ -576,43 +566,38 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	nfrags = skb_cow_data(spi->skb, 0, &trailer);
 	if(nfrags < 0)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tskb_cow_data failed.\n");
+		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - skb_cow_data failed.\n");
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
 
 	// We need some temporary memory to store stuff. Allocate the memory then divide it up.
-	sglists = 1;
+	// sglists = 1;
 	seqhilen = 0;
 
 	// Allocate some memory attached to spi->tmp to host the scatter list.
-	if(!alloc_tmp_e2e(spi, aead, nfrags + sglists, seqhilen))
+	if(!alloc_tmp_e2e(spi, aead, nfrags /* + sglists */, seqhilen))
 	{
-		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\talloc_tmp_e2e failed.\n");
+		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - alloc_tmp_e2e failed.\n");
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
 	seqhi = tmp_seqhi(spi->tmp);
 	iv = tmp_iv(aead, spi->tmp, seqhilen);
 	req = tmp_req(aead, iv);
-	asg = req_sg(aead, req);
-	sg = asg + sglists;
+	sg = req_sg(aead, req);
 
 	// Initialise the contents scatterlist with the number of fragments with have in our skb.
 	sg_init_table(sg, nfrags);
 
 	// Populate the contents scatterlist from the skb, offset from where the real payload data.
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tDecrypting %u bytes at offset %lu bytes...\n", aligned_payload_len, skb_transport_offset(spi->skb) + sizeof(struct superman_header));
-	skb_to_sgvec(spi->skb, sg, skb_transport_offset(spi->skb) + sizeof(struct superman_header), aligned_payload_len + auth_len);
-
-	// Initialise the associated data scatterlist with the header stuff (all of the headers).
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tAssociated data %u bytes...\n", assoc_len);
-	sg_init_one(asg, skb_network_header(spi->skb), assoc_len);
+	printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Decrypting %u bytes at offset %lu bytes with %u of associated data...\n", aligned_payload_len, skb_transport_offset(spi->skb) + sizeof(struct superman_header), assoc_len);
+	skb_to_sgvec(spi->skb, sg, skb_network_offset(spi->skb), assoc_len + aligned_payload_len + auth_len);
 
 	// Setup aead
 	aead_request_set_callback(req, 0, removeE2ESecurityDone, spi);
 	aead_request_set_crypt(req, sg, sg, aligned_payload_len + auth_len, iv);
-	aead_request_set_assoc(req, asg, assoc_len);
+	aead_request_set_ad(req, assoc_len);
 
 	// Pop the callback into the spi.
 	spi->arg = callback;
@@ -623,13 +608,13 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	// If we're told it's in progress, it is being performed asyncronously... steal the packet.
 	if (err == -EINPROGRESS)
 	{
-		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tCrypto is running asyncronously, stealing packet...\n");
+		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Crypto is running asyncronously, stealing packet...\n");
 		spi->result = NF_STOLEN;
 	}	
 	// Crypto finished immediately, go straight to the end. 
 	else
 	{
-		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - \t\tCrypto is running syncronously...\n");
+		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Crypto is running syncronously...\n");
 		spi->arg = NULL;
 		spi->result = RemoveE2ESecurityDone(spi, callback, err);
 	}

@@ -44,20 +44,25 @@ inline struct superman_header* get_superman_header(struct sk_buff *skb)
 
 unsigned int send_superman_packet(struct superman_packet_info* spi, bool result)
 {
+	printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet)...\n");
+
 	if(result)
 	{
 		struct flowi4 fl;
 		struct rtable* rt;
 		struct dst_entry* dst;
 
-		// printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tRouting and sending to %u.%u.%u.%u...\n", 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+		printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tRouting and sending to %u.%u.%u.%u...\n", 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 		ip_send_check(spi->iph);
 
 		flowi4_init_output(&fl, spi->skb->dev->ifindex, 0, 0, RT_SCOPE_UNIVERSE, 0, 0, spi->iph->daddr, spi->iph->saddr, 0, 0);
 		rt = ip_route_output_key(dev_net(spi->skb->dev), &fl);
 		if(IS_ERR(rt))
-			printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tRouting failed.\n");
+		{
+			printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - Routing failed.\n");
+			printk(KERN_INFO "if: %d, src: %u.%u.%u.%u, dst: %u.%u.%u.%u\n", spi->skb->dev->ifindex, 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+		}
 		else
 		{
 			skb_dst_set(spi->skb, &rt->dst);

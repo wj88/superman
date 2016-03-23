@@ -108,8 +108,11 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->state->out);
 		spi->addr = spi->iph->daddr;
 	}
+	// If all else fails, we probably generated this packet ourselves.
 	else
-		spi->addr = 0;
+	{
+		spi->addr = spi->iph->daddr;
+	}
 
 	// Address information about the origin/destination of this packet.	
 	if(spi->ifaddr.s_addr == spi->addr)
@@ -138,6 +141,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 #else
 			spi->secure_packet = false;
 #endif
+			spi->use_broadcast_key = false;
 			break;
 		case IS_MULTICAST:
 		case IS_BROADCAST:
@@ -157,7 +161,10 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 		spi->has_security_details = false;
 	// If it isn't a broadcast packet and we don't have the targets key.
 	else if(!spi->use_broadcast_key && (!GetSecurityTableEntry(spi->addr, &(spi->security_details))))
+	{
+		printk(KERN_INFO "SUPERMAN: packet_info: GetSecurityTableEntry reported no entry for %d.%d.%d.%d.\n", 0x0ff & spi->addr, 0x0ff & (spi->addr >> 8), 0x0ff & (spi->addr >> 16), 0x0ff & (spi->addr >> 24));
 		spi->has_security_details = false;
+	}
 	else
 		spi->has_security_details = true;
 
