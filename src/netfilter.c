@@ -577,14 +577,14 @@ unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 	struct superman_packet_info* spi;
 	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN)\n");
 
-	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - \tfrom %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
-
 	// Let non-IP packets and those of interfaces we're not monitoring.
 	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(state->in->ifindex))
 		return NF_ACCEPT;
 
 	// Construct a new SPI to handle this packet.
 	spi = MallocSupermanPacketInfo(ops, skb, state);
+
+	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - \tfrom %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 	return RemoveE2ESecurity(spi, &hook_localin_remove_e2e);
 }
