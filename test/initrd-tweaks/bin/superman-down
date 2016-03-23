@@ -1,3 +1,5 @@
 #!/bin/sh
 
-rmmod /lib/modules/$(uname -r)/kernel/net/superman/superman.ko
+supermand-down
+supermank-down
+

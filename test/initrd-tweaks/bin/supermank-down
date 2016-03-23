@@ -1,0 +1,4 @@
+#!/bin/sh
+
+echo Bringing down the SUPERMAN kernel module...
+rmmod /lib/modules/$(uname -r)/kernel/net/superman/superman.ko

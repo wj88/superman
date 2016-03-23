@@ -20,7 +20,7 @@ fi
 
 aptInstall "libnl-3-dev libnl-genl-3-dev"
 
-echob Buidling the SUPERMAN kernel module...
+echob Building the SUPERMAN kernel module...
 cd ../kernel-module
 make
 cd ../test

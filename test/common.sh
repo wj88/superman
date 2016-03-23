@@ -3,6 +3,11 @@
 # Update APT no more than every 24 hours
 APT_UPDATE_FREQUENCY="$((24 * 60 * 60))"
 
+# Name of the network bridge
+BRIDGE_IF="br0"
+LO_IF="lo:10"
+#TAP_IF="tap0"
+
 echob()
 {
 	echo -e "\e[1m${@}\e[0m"
@@ -12,7 +17,7 @@ aptUpdate()
 {
 	local forceUpdate="${1}"
 	local -r lastUpdate="$(($(date +'%s') - $(stat -c %Y '/var/lib/apt/periodic/update-success-stamp')))"
-	
+
 	if [ "${forceUpdate}" = "true" ] || [ "${lastUpdate}" -gt "${APT_UPDATE_FREQUENCY}" ]; then
 		echob Updating APT...
 		sudo apt-get update -m
@@ -103,3 +108,73 @@ initrdCreate()
 		popd >/dev/null
 	fi
 }
+
+createBridge()
+{
+	local BRIDGE_IF="$1"
+	local IP="$2"
+	if ! brctl show | grep ${BRIDGE_IF} > /dev/null ; then
+		echo Creating network bridge ${BRIDGE_IF}...
+		sudo brctl addbr ${BRIDGE_IF}		
+		sudo ifconfig ${BRIDGE_IF} ${IP} netmask 255.255.255.0 up
+	fi
+}
+
+removeBridge()
+{
+	local BRIDGE_IF="$1"
+	if brctl show | grep ${BRIDGE_IF} > /dev/null ; then
+		echo Removing network bridge ${BRIDGE_IF}...
+		sudo ip link set dev ${BRIDGE_IF} down	
+		brctl show ${BRIDGE_IF} | tail -n +2 | awk '//{print $4}' | xargs -I '{}' brctl delif ${BRIDGE_IF} {}
+		brctl delbr ${BRIDGE_IF}
+	fi
+}
+
+maybeRemoveBridge()
+{
+	local BRIDGE_IF="$1"
+	if [ "$(brctl show ${BRIDGE_IF} | tail -n +2 | awk '//{print $4}')" = "" ] ; then
+		removeBridge ${BRIDGE_IF}
+	fi
+}
+
+bridgeTap()
+{
+	local TAP_IF="$1"
+	local BRIDGE_IF="$2"
+	sudo brctl addif ${BRIDGE_IF} ${TAP_IF}
+	sudo ip link set dev ${TAP_IF} up
+}
+
+unbridgeTap()
+{
+	local TAP_IF="$1"
+	local BRIDGE_IF="$2"
+	sudo ip link set dev ${TAP_IF} down
+	sudo brctl delif ${BRIDGE_IF} ${TAP_IF}
+}
+
+createTap()
+{
+	local TAP_IF="$1"
+	local BRIDGE_IF="$2"
+	if ! ip tuntap | grep ${TAP_IF} > /dev/null ; then
+		echo Creating a new network tap ${TAP_IF}...
+		sudo ip tuntap add mode tap ${TAP_IF}
+		bridgeTap ${TAP_IF} ${BRIDGE_IF}
+	fi
+}
+
+removeTap()
+{
+	local TAP_IF="$1"
+	local BRIDGE_IF="$2"
+	if ip tuntap | grep ${TAP_IF} > /dev/null ; then
+		echo Removing network tap ${TAP_IF}...
+		sudo ip link set dev ${TAP_IF} down
+		sudo brctl rmif ${BRIDGE_IF} ${TAP_IF}
+		sudo ip tuntap del mode tap ${TAP_IF}
+	fi
+}
+

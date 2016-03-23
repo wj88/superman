@@ -1,0 +1,5 @@
+#!/bin/sh
+
+echo Bringing up the SUPERMAN daemon...
+superman -c /etc/superman/ca_certificate.pem -n /etc/superman/superman-${supermanid}_certificate.pem -p /etc/superman/superman-${supermanid}_dh_privatekey.pem -d
+

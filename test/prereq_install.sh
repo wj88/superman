@@ -6,7 +6,7 @@ prereqInstall()
 {
 	local TARGET_PATH="$1"
 	local INCLUDE_DBG_SYMBOLS=N
-	local PACKAGES="libc6 libnl-3-200 libnl-genl-3-200 libssl1.0.0 linux-image-`uname -r` openssl"
+	local PACKAGES="libc6 libnl-3-200 libnl-genl-3-200 libssl1.0.0 linux-image-`uname -r` openssl iputils-ping iputils-arping iputils-tracepath libcap2"
 	
 	if [ "${INCLUDE_DBG_SYMBOLS}" = "Y" ]; then
 		PACKAGES="${PACKAGES} linux-image-$(uname -r)-dbgsym"

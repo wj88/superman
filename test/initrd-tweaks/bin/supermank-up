@@ -1,0 +1,8 @@
+#!/bin/sh
+
+echo Bringing up the SUPERMAN kernel module...
+insmod /lib/modules/$(uname -r)/kernel/net/superman/superman.ko
+
+while [ ! -e /proc/superman/version ]; do
+	sleep 0.1
+done

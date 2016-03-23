@@ -1,0 +1,13 @@
+#!/bin/sh
+
+SUPERMAND_PID=$(ps | awk '/[s]uperman /{print $1}')
+if [ "${SUPERMAND_PID}" = "" ]; then
+	echo The SUPERMAN daemon is not running.
+	exit 1
+fi
+
+echo Bringing down the SUPERMAN daemon...
+kill ${SUPERMAND_PID}
+while ps | awk '//{print $1}' | grep "${SUPERMAND_PID}" ; do
+	sleep 0.1
+done
