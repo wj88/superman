@@ -143,6 +143,7 @@ bridgeTap()
 {
 	local TAP_IF="$1"
 	local BRIDGE_IF="$2"
+	sudo ip link set dev ${TAP_IF} mtu 2500
 	sudo brctl addif ${BRIDGE_IF} ${TAP_IF}
 	sudo ip link set dev ${TAP_IF} up
 }
