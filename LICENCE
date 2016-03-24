@@ -1,0 +1,20 @@
+Copyright (c) 2016 Dr Jodie Wetherall <wj88@gre.ac.uk>, Faculty of Engineering and Science, University of Greenwich
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+Any academic works (including but not limited to confernence and journal papers) produced as a result of direct or indirect use of this software must cite the following publication:
+http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7412128
+
+Bibtex
+@inproceedings{hurley2015virtual,
+  title={Virtual closed networks: A secure approach to autonomous mobile ad hoc networks},
+  author={Hurley-Smith, Darren and Wetherall, Jodie and Adekunle, Andrew},
+  booktitle={2015 10th International Conference for Internet Technology and Secured Transactions (ICITST)},
+  pages={391--398},
+  year={2015},
+  organization={IEEE}
+}
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
