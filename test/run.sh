@@ -2,7 +2,7 @@
 
 . ./common.sh
 
-aptInstall "qemu uml-utilities bridge-utils"
+aptInstall "qemu uml-utilities bridge-utils gnome-terminal"
 
 startQemu()
 {
@@ -28,7 +28,7 @@ startQemu()
 	echob Starting QEMU emulation for node ${NODE_ID}...
 	sudo gnome-terminal --disable-factory -e "qemu-system-x86_64 ${QEMU_ARGS}" 2&> /dev/null
 
-	sudo chmod 666 /tmp/superman-node${NODE_ID}.pcap
+	[ -e /tmp/superman-node${NODE_ID} ] && sudo chmod 666 /tmp/superman-node${NODE_ID}.pcap
 
 }
 
