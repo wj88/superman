@@ -11,7 +11,7 @@
 #define SUPERMAN_PROTOCOL_NUM 253
 
 // Comment the next line if local comms should not be encrypted
-#define ENCRYPT_LOCAL
+//#define ENCRYPT_LOCAL
 
 #else
 

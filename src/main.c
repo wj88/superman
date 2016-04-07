@@ -203,7 +203,9 @@ void Run()
 	// unsigned int ifname_len = 5; // inc. null terminator
 	bool discoverySent = false;
 
-	UpdateSupermanInterfaceTableEntry(3, "lo", true);
+#ifdef ENCRYPT_LOCAL
+        UpdateSupermanInterfaceTableEntry(3, "lo", false);
+#endif
 	UpdateSupermanInterfaceTableEntry(5, "eth0", true);
 
 
@@ -216,7 +218,7 @@ void Run()
 
 		time_t timeNow;
 		time(&timeNow);
-		if(difftime(timeNow, last_discovery_request) >= 5.0)
+		if(difftime(timeNow, last_discovery_request) >= 3.0)
 		{
 			time(&last_discovery_request);
 
@@ -238,7 +240,9 @@ void Run()
 		}
         }
 
+#ifdef ENCRYPT_LOCAL
 	UpdateSupermanInterfaceTableEntry(3, "lo", false);
+#endif
 	UpdateSupermanInterfaceTableEntry(5, "eth0", false);
 }
 
