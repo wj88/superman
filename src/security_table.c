@@ -139,34 +139,41 @@ bool GetSecurityTableEntry(uint32_t daddr, struct security_table_entry** entry)
 
 bool UpdateSecurityTableEntry(struct security_table_entry *e, uint32_t daddr, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
 {
-	printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - clearing security table entry.\n");
+	// printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - clearing security table entry.\n");
 	ClearSecurityTableEntry(e);
 
-	printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - updating security table entry...\n");
+	// printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - updating security table entry...\n");
 
 	e->daddr = daddr;
 	e->flag = flag;
-	if(timestamp != -1) e->timestamp = timestamp;
-	if(timestamp != -1) e->ifindex = ifindex;
+	if(timestamp == -1)
+	{
+		// printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - not updating timestamp or ifindex.");
+	}
+	else
+	{
+		e->timestamp = timestamp;
+		e->ifindex = ifindex;
+	}
 
-	printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - sk_len: %d, ske_len: %d, skp_len: %d\n", sk_len, ske_len, skp_len);
+	// printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - sk_len: %d, ske_len: %d, skp_len: %d\n", sk_len, ske_len, skp_len);
 	if(
 		((sk_len == 0) || (e->sk = kmalloc(sk_len, GFP_ATOMIC))) &&
 		((ske_len == 0) || (e->ske = kmalloc(ske_len, GFP_ATOMIC))) &&
 		((skp_len == 0) || (e->skp = kmalloc(skp_len, GFP_ATOMIC)))
 	)
 	{
-		printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - malloc's succeeded.\n");
+		// printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - malloc's succeeded.\n");
 		e->sk_len = sk_len;
 		e->ske_len = ske_len;
 		e->skp_len = skp_len;
 
-		printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - copying variables.\n");
+		// printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - copying variables.\n");
 		if(sk_len > 0) memcpy(e->sk, sk, sk_len); else e->sk = NULL;
 		if(ske_len > 0) memcpy(e->ske, ske, ske_len); else e->ske = NULL;
 		if(skp_len > 0) memcpy(e->skp, skp, skp_len); else e->skp = NULL;
 
-		printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - copying complete.\n");
+		// printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - copying complete.\n");
 		return true;
 	}
 	else
@@ -199,7 +206,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 
 	if(GetSecurityTableEntry(daddr, &e))
 	{
-		printk(KERN_INFO "Security_Table:\tUpdateOrAddSecurityTableEntry - updating existing entry.\n");
+		// printk(KERN_INFO "Security_Table:\tUpdateOrAddSecurityTableEntry - updating existing entry.\n");
 
 		// printk(KERN_ERR "SUPERMAN: security_table - \t\tUpdating an existing entry...\n");
 		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
@@ -210,13 +217,13 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 		}
 		else
 		{
-			printk(KERN_INFO "security_table:\tUpdateOrAddSecurityTableEntry - success.\n");
+			// printk(KERN_INFO "security_table:\tUpdateOrAddSecurityTableEntry - success.\n");
 			return true;
 		}
 	}
 	else
 	{
-		printk(KERN_INFO "Security_Table:\tUpdateOrAddSecurityTableEntry - creating new entry.\n");
+		// printk(KERN_INFO "Security_Table:\tUpdateOrAddSecurityTableEntry - creating new entry.\n");
 
 		// printk(KERN_ERR "SUPERMAN: security_table - \t\tCreating a new entry...\n");
 		e = kmalloc(sizeof(struct security_table_entry), GFP_ATOMIC);
@@ -242,7 +249,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 			return false;
 		}
 
-		printk(KERN_INFO "Security_Table:\tUpdateOrAddSecurityTableEntry - adding entry to the table.\n");
+		// printk(KERN_INFO "Security_Table:\tUpdateOrAddSecurityTableEntry - adding entry to the table.\n");
 		write_lock_bh(&security_table_lock);
 		r = __security_table_add(e);
 		if(r)

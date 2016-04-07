@@ -50,7 +50,7 @@ struct superman_header {
 };
 #pragma pack(pop)
 
-
+inline const char* lookup_superman_packet_type_desc(__u8 type);
 inline bool is_superman_packet(struct sk_buff* skb);
 inline struct superman_header* get_superman_header(struct sk_buff *skb);
 

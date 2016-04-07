@@ -591,21 +591,21 @@ int k_update_superman_broadcast_key(struct sk_buff *skb_msg, struct genl_info *i
 
 	GENL_PARSE(K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MAX, k_update_superman_broadcast_key_genl_policy)
 
-	printk(KERN_INFO "k_update_superman_broadcast_key...\n");
+	// printk(KERN_INFO "k_update_superman_broadcast_key...\n");
 
 	GENL_MALLOC(sk, sk_len, K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SK);
 	GENL_MALLOC(ske, ske_len, K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKE);
 	GENL_MALLOC(skp, skp_len, K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKP);
 	overwrite = nla_get_flag(attrs[K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_OVERWRITE]);
 
-	printk(KERN_INFO "sk_len: %d\n", sk_len);
-	printk(KERN_INFO "ske_len: %d\n", ske_len);
-	printk(KERN_INFO "skp_len: %d\n", skp_len);
-	printk(KERN_INFO "overwrite: %d\n", overwrite);
+	// printk(KERN_INFO "sk_len: %d\n", sk_len);
+	// printk(KERN_INFO "ske_len: %d\n", ske_len);
+	// printk(KERN_INFO "skp_len: %d\n", skp_len);
+	// printk(KERN_INFO "overwrite: %d\n", overwrite);
 
 	UpdateSupermanBroadcastKey(sk_len, sk, ske_len, ske, skp_len, skp, overwrite);
 
-	printk(KERN_INFO "...k_update_superman_broadcast_key - complete.\n");
+	// printk(KERN_INFO "...k_update_superman_broadcast_key - complete.\n");
 
 	GENL_FREE(sk);
 	GENL_FREE(ske);
@@ -642,13 +642,13 @@ int k_send_superman_certificate_request(struct sk_buff *skb_msg, struct genl_inf
 	address = nla_get_u32(attrs[K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS]);
 	GENL_MALLOC(sk, sk_len, K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK);
 
-	printk(KERN_INFO "SUPERMAN: Netlink - k_send_superman_certificate_request...\n");
+	// printk(KERN_INFO "SUPERMAN: Netlink - k_send_superman_certificate_request...\n");
 
 	SendSupermanCertificateRequest(address, sk_len, sk);
 
 	GENL_FREE(sk);
 
-	printk(KERN_INFO "SUPERMAN: Netlink - ... k_send_superman_certificate_request done.\n");
+	// printk(KERN_INFO "SUPERMAN: Netlink - ... k_send_superman_certificate_request done.\n");
 
 	return 0;
 }
@@ -749,7 +749,7 @@ int d_received_superman_broadcast_key_exchange(struct sk_buff *skb_msg, struct g
 
 #define GENL_PARSE(ATTR_MAX, POLICY) \
 	struct nlattr *attrs[ATTR_MAX + 1];					\
-	printf("Netlink: \tParsing generic netlink message...\n");		\
+	/* printf("Netlink: \tParsing generic netlink message...\n"); */	\
 	if(genlmsg_parse(nlh, 0, attrs, ATTR_MAX, POLICY) < 0)			\
 	{									\
 		printf("Netlink: \tFailed to parse netlink message\n");		\
@@ -937,7 +937,7 @@ int d_superman_messaging_callback(struct nl_msg* msg, void* arg)
 		return NL_SKIP;
 	}
 
-	printf("Netlink: Received message \"%s\".\n", superman_msg_type_to_str(genlh->cmd));
+	// printf("Netlink: Received message \"%s\".\n", superman_msg_type_to_str(genlh->cmd));
 
 	switch(genlh->cmd)
 	{
@@ -1106,15 +1106,11 @@ void SendSupermanDiscoveryRequest(uint32_t sk_len, unsigned char* sk)
 
 void SendSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned char* sk)
 {
-	printf("Netlink: SendSupermanCertificateRequest...\n");				\
-
 	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_REQUEST)
 	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,							address		) ||
 		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,					sk_len,			sk		))
 		fail = 1;
 	D_GENL_FINISH
-
-	printf("Netlink: ... SendSupermanCertificateRequest done.\n");				\
 }
 
 void SendSupermanCertificateExchange(uint32_t address, uint32_t certificate_len, unsigned char* certificate)

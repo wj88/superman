@@ -12,6 +12,27 @@
 #include "interfaces_table.h"
 #include "security_table.h"
 
+static const char* const superman_packet_type_desc[] = {
+	"UNKNOWN",
+	"SUPERMAN_DISCOVERY_REQUEST_TYPE",
+	"SUPERMAN_CERTIFICATE_REQUEST_TYPE",
+	"SUPERMAN_CERTIFICATE_EXCHANGE_TYPE",
+	"SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE",
+	"SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE",
+	"SUPERMAN_AUTHENTICATED_SK_RESPONSE_TYPE",
+	"SUPERMAN_SK_INVALIDATE_TYPE",
+	"SUPERMAN_BROADCAST_KEY_EXCHANGE_TYPE",
+	"SUPERMAN_DATA_PACKET"
+};
+
+inline const char* lookup_superman_packet_type_desc(__u8 type)
+{
+	if(type >= 0 && type <= SUPERMAN_MAX_TYPE)
+		return superman_packet_type_desc[type];
+	else
+		return superman_packet_type_desc[SUPERMAN_MAX_TYPE+1];
+}
+
 static inline u_int8_t _encode_ip_protocol(u_int8_t protocol)
 {
 	return protocol + SUPERMAN_MAX_TYPE;
@@ -34,7 +55,7 @@ struct net_device* lookup_dst(uint32_t addr)
 inline bool is_superman_packet(struct sk_buff* skb)
 {
 	// Does this IPv4 packet contain superman payload?
-	return (ip_hdr(skb)->protocol == SUPERMAN_PROTOCOL_NUM);
+	return (((struct iphdr*)skb_network_header(skb))->protocol == SUPERMAN_PROTOCOL_NUM);
 }
 
 inline struct superman_header* get_superman_header(struct sk_buff *skb)
@@ -44,7 +65,7 @@ inline struct superman_header* get_superman_header(struct sk_buff *skb)
 
 unsigned int send_superman_packet(struct superman_packet_info* spi, bool result)
 {
-	printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet)...\n");
+	// printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet)...\n");
 
 	if(result)
 	{
@@ -52,7 +73,7 @@ unsigned int send_superman_packet(struct superman_packet_info* spi, bool result)
 		struct rtable* rt;
 		struct dst_entry* dst;
 
-		printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tRouting and sending to %u.%u.%u.%u...\n", 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+		printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - (%u) %s, %d bytes sending to %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 		ip_send_check(spi->iph);
 
@@ -65,11 +86,13 @@ unsigned int send_superman_packet(struct superman_packet_info* spi, bool result)
 		}
 		else
 		{
+			spi->skb->protocol = htons(ETH_P_IP);
 			skb_dst_set(spi->skb, &rt->dst);
 			dst = skb_dst(spi->skb);
 			spi->skb->dev = dst->dev;
 
 			// printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tSending...\n");
+			spi->result = NF_ACCEPT;
 			dst->output(NULL, spi->skb);
 		}
 	}
@@ -95,7 +118,6 @@ unsigned int hash_then_send_superman_packet(struct superman_packet_info* spi, bo
 bool EncapsulatePacket(struct superman_packet_info* spi)
 {
 	uint32_t iph_len;
-
 	// printk(KERN_INFO "SUPERMAN: Packet - \tEncapsulating packet...\n");
 
 	// printk(KERN_INFO "SUPERMAN: Packet - \tPacket before encapsulation...\n");
@@ -147,7 +169,7 @@ bool EncapsulatePacket(struct superman_packet_info* spi)
 	// Fill in the superman header
 	spi->shdr = (struct superman_header*)skb_transport_header(spi->skb);
 	spi->shdr->type = SUPERMAN_MAX_TYPE + spi->iph->protocol;					// We're preparing a superman packet.
-	spi->shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(htonl(spi->addr)));			// This will be a unique counter value for each packet, cycling round.
+	spi->shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(spi->addr)));			// This will be a unique counter value for each packet, cycling round.
 	spi->shdr->payload_len = htons(spi->skb->len - iph_len - sizeof(struct superman_header));	// The payload length.	
 
 	// Update the IP header
@@ -242,7 +264,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_DISCOVERY_REQUEST_TYPE;					// We're preparing a discovery request packet.
-	shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(htonl(INADDR_BROADCAST)));		// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(INADDR_BROADCAST)));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sk_len);						// A discovery request contains an SK.
 
 	// Setup the IP header
@@ -252,7 +274,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
 	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
-	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
 	iph->ttl = 64;									// A recommended value (in seconds)
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
@@ -279,7 +301,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	void* payload;
 	struct superman_packet_info* spi;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Request to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Request to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
 
 	// Grab some information about the interface.
 	if(!GetSecurityTableEntry(addr, &ste))
@@ -324,7 +346,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_REQUEST_TYPE;					// We're preparing a certificate request packet.
-	shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(htonl(addr)));		// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(addr)));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sk_len);						// A certificate request contains an SK.
 
 	// Setup the IP header
@@ -334,7 +356,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
 	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
-	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
 	iph->ttl = 64;									// A recommended value (in seconds)
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
@@ -361,7 +383,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	void* payload;
 	struct superman_packet_info* spi;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Exchange to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Exchange to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
 
 	// Grab some information about the interface.
 	if(!GetSecurityTableEntry(addr, &ste))
@@ -407,7 +429,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_EXCHANGE_TYPE;				// We're preparing a certificate exchange packet.
-	shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(htonl(addr)));		// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(addr)));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(certificate_len + sizeof(__be16));			// A certificate exchange contains a certificate.
 
 	// Setup the IP header
@@ -417,7 +439,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
 	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
-	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
 	iph->ttl = 64;									// A recommended value (in seconds)
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
@@ -494,7 +516,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE;		// We're preparing a certificate exchange with broadcast key packet.
-	shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(htonl(addr)));		// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(addr)));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(certificate_len + sizeof(__be16) + broadcast_key_len + sizeof(__be16));	// A certificate exchange with broadcast key contains a certificate and broadcast key.
 
 	// Setup the IP header
@@ -504,7 +526,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
 	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
-	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
 	iph->ttl = 64;									// A recommended value (in seconds)
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
@@ -590,7 +612,7 @@ void SendAuthenticatedSKResponsePacket(uint32_t saddr, uint32_t daddr, uint32_t 
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_AUTHENTICATED_SK_RESPONSE_TYPE;		// We're preparing an SK response packet.
-	shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(htonl(daddr)));		// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(daddr)));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sizeof(__be16) + sk_len + sizeof(uint32_t) + sizeof(uint32_t));						// An SK request contains the address information capture along the route, used for the return journey.
 
 	// Setup the IP header
@@ -600,7 +622,7 @@ void SendAuthenticatedSKResponsePacket(uint32_t saddr, uint32_t daddr, uint32_t 
 	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
 	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
-	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
 	iph->ttl = 64;									// A recommended value (in seconds)
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
@@ -683,7 +705,7 @@ void SendAuthenticatedSKRequestPacket(uint32_t saddr, uint32_t daddr)
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE;		// We're preparing an SK request packet.
-	shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(htonl(daddr)));		// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(daddr)));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sizeof(uint32_t) + sizeof(uint32_t));						// An SK request contains the address information capture along the route, used for the return journey.
 
 	// Setup the IP header
@@ -693,7 +715,7 @@ void SendAuthenticatedSKRequestPacket(uint32_t saddr, uint32_t daddr)
 	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
 	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
-	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
 	iph->ttl = 64;									// A recommended value (in seconds)
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
@@ -751,7 +773,7 @@ void SendInvalidateSKPacket(uint32_t addr)
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_SK_INVALIDATE_TYPE;					// We're preparing an SK invalidate packet.
-	shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(htonl(INADDR_BROADCAST)));		// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(INADDR_BROADCAST)));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sizeof(addr));					// An SK invalidate contains an address.
 
 	// Setup the IP header
@@ -761,7 +783,7 @@ void SendInvalidateSKPacket(uint32_t addr)
 	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
 	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
-	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
 	iph->ttl = 64;									// A recommended value (in seconds)
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
@@ -820,7 +842,7 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	shdr = (struct superman_header*) skb_push(tx_sk, sizeof(struct superman_header));
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_SK_INVALIDATE_TYPE;					// We're preparing a broadcast key exchange packet.
-	shdr->timestamp = htons(GetNextTimestampFromSecurityTableEntry(htonl(INADDR_BROADCAST)));		// This will be a unique counter value for each packet, cycling round.
+	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(INADDR_BROADCAST)));		// This will be a unique counter value for each packet, cycling round.
 	shdr->payload_len = htons(sizeof(__be16) + broadcast_key_len);			// A broadcast key exchange packet contains a broadcast key.
 
 	// Setup the IP header
@@ -830,7 +852,7 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	iph->ihl = 5;									// Number of 32-bit words in the header (min 5)
 	iph->tos = 0;									// Was TOS, now DSCP (Differentiated Services Code Point) - not required.
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
-	iph->frag_off = htons(0);							// Fragment Offset - this packet is not fragmented
+	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
 	iph->ttl = 64;									// A recommended value (in seconds)
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number

@@ -3,6 +3,7 @@
 #include <linux/netdevice.h>
 #include "packet_info.h"
 #include "packet.h"
+#include "security.h"
 #include "security_table.h"
 
 static unsigned int superman_packet_info_count = 0;
@@ -80,10 +81,20 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	spi->skb = skb;
 	spi->state = state;
 
+	// Packet arrival isn't always linear which breaks things. Fix that here.
+	skb_linearize(skb);
+	//printk(KERN_INFO "SUPERMAN: packet_info: IP Offset: %d, Transport Offset: %d, Transport*: %lu.\n", skb_network_offset(skb), skb_transport_offset(skb), (unsigned long)(skb_transport_header(skb)-skb_network_header(skb)));
+	//printk(KERN_INFO "SUPERMAN: packet_info: IP Header:\n");
+	//dump_bytes(skb_network_header(skb), skb_network_header_len(skb));
+	//printk(KERN_INFO "SUPERMAN: packet_info: Transport Header:\n");
+	//dump_bytes(skb_transport_header(skb), sizeof(struct superman_header));
+
 	// Useful pointers to the relevant parts of the packet.
-	spi->iph = ip_hdr(skb);				// We can grab the IP header
-	if(!is_superman_packet(skb))			// We can only get this at local in/out - routing may have added additional headers.
+	spi->iph = (struct iphdr*)skb_network_header(skb);	// We can grab the IP header
+
+	if(!is_superman_packet(skb))				// We can only get this at local in/out - routing may have added additional headers.
 	{
+		//printk(KERN_INFO "SUPERMAN: packet_info: \t\tNot a SUPERMAN packet.\n");
 		spi->shdr = NULL;
 		spi->payload = NULL;
 	}
@@ -162,7 +173,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	// If it isn't a broadcast packet and we don't have the targets key.
 	else if(!spi->use_broadcast_key && (!GetSecurityTableEntry(spi->addr, &(spi->security_details))))
 	{
-		printk(KERN_INFO "SUPERMAN: packet_info: GetSecurityTableEntry reported no entry for %d.%d.%d.%d.\n", 0x0ff & spi->addr, 0x0ff & (spi->addr >> 8), 0x0ff & (spi->addr >> 16), 0x0ff & (spi->addr >> 24));
+		// printk(KERN_INFO "SUPERMAN: packet_info: GetSecurityTableEntry reported no entry for %d.%d.%d.%d.\n", 0x0ff & spi->addr, 0x0ff & (spi->addr >> 8), 0x0ff & (spi->addr >> 16), 0x0ff & (spi->addr >> 24));
 		spi->has_security_details = false;
 	}
 	else

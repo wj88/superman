@@ -516,9 +516,14 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 	// Deal with special case unencapsulated SUPERMAN packets which are not secured!
 	if(spi->shdr)
 	{
-		if(ntohs(spi->shdr->payload_len) > skb->len - (skb_transport_offset(skb) + sizeof(struct superman_header)))
+		printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - (%u) %s, %d bytes recieved from %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24));
+
+
+		if(ntohs(spi->shdr->payload_len) > spi->iph->tot_len - (skb_network_header_len(skb) + sizeof(struct superman_header)))
 		{
-			printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tSuperman packet failed initial basic sanity check.\n");
+			//printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - Superman packet failed initial basic sanity check.\n");
+			//printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \tPayload length, expected: %d, available: %lu.\n", ntohs(spi->shdr->payload_len), spi->iph->tot_len - (skb_network_header_len(skb) + sizeof(struct superman_header)));
+			dump_packet(spi->skb);
 			spi->result = NF_DROP;
 			return FreeSupermanPacketInfo(spi);
 		}
@@ -539,30 +544,36 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 				return FreeSupermanPacketInfo(spi);
 				break;
 		}
+
+		// Do we have the required security details of the source to remove
+		// the P2P... if not we must queue up the packet and request them.
+		if(spi->secure_packet && !spi->has_security_details)
+		{
+			// If it the broadcast key we don't have, ditch the packet.
+			if(spi->use_broadcast_key)
+			{
+				// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tBroadcast packet but we don't have a broadcast key.\n");
+
+				spi->result = NF_DROP;
+				return FreeSupermanPacketInfo(spi);
+			}
+			// Otherwise queue the packet and send an SK request.
+			else
+			{
+				// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tWe don't have the the security details. Queuing packet and sending an SK Request.\n");
+
+				spi->result = NF_STOLEN;
+				EnqueuePacket(spi, &hook_prerouting_post_sk_response);
+				SendAuthenticatedSKRequestPacket(0, spi->addr);
+				return spi->result;
+			}
+		}
 	}
-
-	// Do we have the required security details of the source to remove
-	// the P2P... if not we must queue up the packet and request them.
-	if(spi->secure_packet && !spi->has_security_details)
+	// If the packet is not a SUPERMAN packet but we're securing the interface, drop the packet.
+	else if(spi->secure_packet)
 	{
-		// If it the broadcast key we don't have, ditch the packet.
-		if(spi->use_broadcast_key)
-		{
-			// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tBroadcast packet but we don't have a broadcast key.\n");
-
-			spi->result = NF_DROP;
-			return FreeSupermanPacketInfo(spi);
-		}
-		// Otherwise queue the packet and send an SK request.
-		else
-		{
-			// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tWe don't have the the security details. Queuing packet and sending an SK Request.\n");
-
-			spi->result = NF_STOLEN;
-			EnqueuePacket(spi, &hook_prerouting_post_sk_response);
-			SendAuthenticatedSKRequestPacket(0, spi->addr);
-			return spi->result;
-		}
+		spi->result = NF_DROP;
+		return FreeSupermanPacketInfo(spi);
 	}
 
 	// For all other packet types, they must pass the hmac check!

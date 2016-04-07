@@ -13,12 +13,12 @@ void UpdateSupermanInterfaceTableEntry(uint32_t interface_name_len, unsigned cha
 {
 	if(monitor_flag)
 	{
-		printk(KERN_INFO "SUPERMAN: processor - \tAdding %s to the interfaces table.\n", interface_name);
+		printk(KERN_INFO "SUPERMAN: Adding %s to the interfaces table.\n", interface_name);
 		AddInterfacesTableEntryByName(interface_name);
 	}
 	else
 	{
-		printk(KERN_INFO "SUPERMAN: processor - \tRemoving %s from the interfaces table.\n", interface_name);
+		printk(KERN_INFO "SUPERMAN: Removing %s from the interfaces table.\n", interface_name);
 		RemoveInterfacesTableEntryByName(interface_name);
 	}
 }
@@ -81,18 +81,18 @@ void ReceivedSupermanDiscoveryRequest(uint32_t address, uint32_t sk_len, unsigne
 	uint32_t skp_len;
 	unsigned char* skp;
 
-	printf("Processor: \tObtaining SKE and SKP from the SK...\n");
+	// printf("Processor: \tObtaining SKE and SKP from the SK...\n");
 	if(MallocAndDHAndGenerateSharedkeys(sk_len, sk, &ske_len, &ske, &skp_len, &skp))
 	{
-		printf("Processor: \tRequesting a security table update...\n");
+		// printf("Processor: \tRequesting a security table update...\n");
 		UpdateSupermanSecurityTableEntry(address, 1, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex);
 
 		uint32_t our_sk_len;
 		unsigned char* our_sk;
-		printf("Processor: \tGrabbing our SK...\n");
+		// printf("Processor: \tGrabbing our SK...\n");
 		if(MallocAndCopyPublickey(&our_sk_len, &our_sk))
 		{
-			printf("Processor: \tRequesting to send a certificate request...\n");
+			// printf("Processor: \tRequesting to send a certificate request...\n");
 			SendSupermanCertificateRequest(address, our_sk_len, our_sk);
 			free(our_sk);
 		}
@@ -113,20 +113,20 @@ void ReceivedSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsig
 	uint32_t skp_len;
 	unsigned char* skp;
 
-	printf("Processor: \tObtaining SKE and SKP from the SK...\n");
+	// printf("Processor: \tObtaining SKE and SKP from the SK...\n");
 	if(MallocAndDHAndGenerateSharedkeys(sk_len, sk, &ske_len, &ske, &skp_len, &skp))
 	{
-		printf("Processor: \tRequesting a security table update...\n");
+		// printf("Processor: \tRequesting a security table update...\n");
 		UpdateSupermanSecurityTableEntry(address, 2, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex);
 		free(ske);
 		free(skp);
 		
 		uint32_t our_cert_len;
 		unsigned char* our_cert;
-		printf("Processor: \tGrabbing our certificate...\n");
+		// printf("Processor: \tGrabbing our certificate...\n");
 		if(MallocAndCopyCertificate(&our_cert_len, &our_cert))
 		{
-			printf("Processor: \tRequesting to send a certificate exchange...\n");
+			// printf("Processor: \tRequesting to send a certificate exchange...\n");
 			SendSupermanCertificateExchange(address, our_cert_len, our_cert);
 			free(our_cert);
 		}
@@ -139,17 +139,17 @@ void ReceivedSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsig
 
 void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t sk_len, unsigned char* sk, uint32_t certificate_len, unsigned char* certificate)
 {
-	printf("Processor: \tVerifying certificate...\n");
+	// printf("Processor: \tVerifying certificate...\n");
 	if(VerifyCertificate(certificate_len, certificate, sk, sk_len))
 	{
 		uint32_t ske_len;
 		unsigned char* ske;
 		uint32_t skp_len;
 		unsigned char* skp;
-		printf("Processor: \tObtaining SKE and SKP from the SK...\n");
+		// printf("Processor: \tObtaining SKE and SKP from the SK...\n");
 		if(MallocAndDHAndGenerateSharedkeys(sk_len, sk, &ske_len, &ske, &skp_len, &skp))
 		{
-			printf("Processor: \tRequesting a security table update...\n");
+			// printf("Processor: \tRequesting a security table update...\n");
 			UpdateSupermanSecurityTableEntry(address, 3, sk_len, sk, ske_len, ske, skp_len, skp, -1, -1);
 			free(ske);
 			ske = NULL;
@@ -158,7 +158,7 @@ void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t sk_len, unsi
 			
 			uint32_t our_cert_len;;
 			unsigned char* our_cert;
-			printf("Processor: \tGrabbing our certificate...\n");
+			// printf("Processor: \tGrabbing our certificate...\n");
 			if(MallocAndCopyCertificate(&our_cert_len, &our_cert))
 			{
 
@@ -192,7 +192,7 @@ void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t sk_len, unsi
 				*/
 
 				// Send the certificate exchange with the broadcast key. The broadcast key is in kernel memory.
-				printf("Processor: \tRequesting to send a certificate exchange with broadcast key...\n");
+				// printf("Processor: \tRequesting to send a certificate exchange with broadcast key...\n");
 				SendSupermanCertificateExchangeWithBroadcastKey(address, our_cert_len, our_cert);
 
 				free(our_cert);
@@ -215,7 +215,7 @@ void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t sk_len, unsi
 
 void ReceivedSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t sk_len, unsigned char* sk, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key)
 {
-	printf("Processor: \tVerifying certificate...\n");
+	// printf("Processor: \tVerifying certificate...\n");
 	if(VerifyCertificate(certificate_len, certificate, sk, sk_len))
 	{
 		uint32_t ske_len;
@@ -223,10 +223,10 @@ void ReceivedSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint3
 		uint32_t skp_len;
 		unsigned char* skp;
 
-		printf("Processor: \tObtaining SKE and SKP from the SK...\n");
+		// printf("Processor: \tObtaining SKE and SKP from the SK...\n");
 		if(MallocAndDHAndGenerateSharedkeys(sk_len, sk, &ske_len, &ske, &skp_len, &skp))
 		{
-			printf("Processor: \tRequesting a security table update...\n");
+			// printf("Processor: \tRequesting a security table update...\n");
 			UpdateSupermanSecurityTableEntry(address, 3, sk_len, sk, ske_len, ske, skp_len, skp, -1, -1);
 
 			free(ske);
@@ -234,14 +234,13 @@ void ReceivedSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint3
 			free(skp);
 			skp = NULL;
 
-			printf("Processor: \tGenerating SKE and SKP for the broadcast key...\n");
+			// printf("Processor: \tGenerating SKE and SKP for the broadcast key...\n");
 			if(MallocAndGenerateSharedkeys(broadcast_key_len, broadcast_key, &ske_len, &ske, &skp_len, &skp))
 			{			
 				// This has to be done before we commit the new key.
-				printf("Processor: \tRequesting a broadcast key update for nodes we're associated with...\n");
+				// printf("Processor: \tRequesting a broadcast key update for nodes we're associated with...\n");
 				SendSupermanBroadcastKeyExchange(broadcast_key_len, broadcast_key);
 			
-				printf("Processor: \tRequesting a broadcast key update for ourselves...\n");
 				UpdateSupermanBroadcastKey(broadcast_key_len, broadcast_key, ske_len, ske, skp_len, skp, true);
 
 				free(ske);
