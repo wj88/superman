@@ -635,14 +635,14 @@ int k_send_superman_discovery_request(struct sk_buff *skb_msg, struct genl_info 
 
 int k_send_superman_certificate_request(struct sk_buff *skb_msg, struct genl_info *info)
 {
-	printk(KERN_INFO "SUPERMAN: Netlink - k_send_superman_certificate_request...\n");
-
 	uint32_t address;
 	uint32_t sk_len;
 	unsigned char* sk;
 	GENL_PARSE(K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_MAX, k_send_superman_certificate_request_genl_policy)
 	address = nla_get_u32(attrs[K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS]);
 	GENL_MALLOC(sk, sk_len, K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK);
+
+	printk(KERN_INFO "SUPERMAN: Netlink - k_send_superman_certificate_request...\n");
 
 	SendSupermanCertificateRequest(address, sk_len, sk);
 
