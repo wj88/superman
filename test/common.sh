@@ -174,7 +174,7 @@ removeTap()
 	if ip tuntap | grep ${TAP_IF} > /dev/null ; then
 		echo Removing network tap ${TAP_IF}...
 		sudo ip link set dev ${TAP_IF} down
-		sudo brctl rmif ${BRIDGE_IF} ${TAP_IF}
+		sudo brctl delif ${BRIDGE_IF} ${TAP_IF}
 		sudo ip tuntap del mode tap ${TAP_IF}
 	fi
 }
