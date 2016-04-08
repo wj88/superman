@@ -320,6 +320,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 
 	// Start with a zero checksum.
 	spi->iph->check = 0;
+	spi->shdr->last_node = htonl(0);
 
 	// We have a key to use, load it into the crypto process.
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key:\n");
@@ -561,6 +562,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 
 	// Start with a zero checksum.
 	spi->iph->check = 0;
+	spi->shdr->last_node = htonl(0);
 	
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet contents:\n");

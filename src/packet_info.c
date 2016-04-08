@@ -67,7 +67,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	struct superman_packet_info* spi;
 	++superman_packet_info_count;
 	++superman_packet_info_id_counter;
-	// printk(KERN_INFO "SUPERMAN: packet_info: \tAllocating a new superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, superman_packet_info_id_counter);
+	printk(KERN_INFO "SUPERMAN: packet_info: \tAllocating a new superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, superman_packet_info_id_counter);
 
 	spi = kmalloc(sizeof(struct superman_packet_info), GFP_ATOMIC);
 	if(spi == NULL)
@@ -138,7 +138,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 		spi->addr_type = IS_OTHER;
 
 	// Deal with the special case of SK requests
-	if(spi->shdr != NULL && spi->shdr->type == SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE)
+	if(spi->shdr != NULL && (spi->shdr->type == SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE || spi->shdr->type == SUPERMAN_AUTHENTICATED_SK_RESPONSE_TYPE))
 		spi->addr_type = IS_BROADCAST;
 
 	// Security information
@@ -197,7 +197,7 @@ unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi)
 {
 	unsigned int nf_result = spi->result;
 	superman_packet_info_count--;
-	// printk(KERN_INFO "SUPERMAN: packet_info: \tFreeing superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, spi->id);
+	printk(KERN_INFO "SUPERMAN: packet_info: \tFreeing superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, spi->id);
 
 	if(spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)
 	{

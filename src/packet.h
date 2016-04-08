@@ -47,7 +47,32 @@ struct superman_header {
 	__u8	type;
 	__be16	timestamp;
 	__be16	payload_len;
+	__be32	last_node;
 };
+#define SUPERMAN_HEADER_LEN sizeof(struct superman_header)
+
+struct sk_request_payload {
+	//    4 bytes    |   4 bytes  
+	// -----------------------------
+	//   originaddr  |  targetaddr   
+	// -----------------------------
+	__be32		originaddr;
+	__be32		targetaddr;
+};
+#define SK_REQUEST_PAYLOAD_LEN sizeof(struct sk_request_payload)
+
+struct sk_response_payload {
+	//    4 bytes   |  4 bytes   | 2 bytes | sk_len    
+	// -----------------------------------------
+	//   originaddr | targetaddr |  sk_len |  sk   
+	// -----------------------------------------
+	__be32		originaddr;
+	__be32		targetaddr;
+	__be16		sk_len;
+	unsigned char	sk[0];
+};
+#define SK_RESPONSE_PAYLOAD_LEN(sk_len) (sizeof(struct sk_response_payload) + sk_len)
+
 #pragma pack(pop)
 
 inline const char* lookup_superman_packet_type_desc(__u8 type);
@@ -61,8 +86,8 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk);
 void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char* sk);
 void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsigned char* certificate);
 void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key);
-void SendAuthenticatedSKRequestPacket(uint32_t saddr, uint32_t daddr);
-void SendAuthenticatedSKResponsePacket(uint32_t saddr, uint32_t daddr, uint32_t sk_len, unsigned char* sk);
+void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr);
+void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr, uint32_t sk_len, unsigned char* sk);
 
 void SendInvalidateSKPacket(uint32_t addr);
 

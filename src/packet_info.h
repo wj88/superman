@@ -46,9 +46,17 @@ struct superman_packet_info
 	// Security information
 	bool secure_packet;
 	bool use_broadcast_key;
-	int security_flag;
+
+	// End to end
 	struct security_table_entry* security_details;
 	bool has_security_details;
+	int security_flag;
+
+	// Next hop details
+	__be32 next_hop_addr;
+	struct security_table_entry* next_hop_security_details;
+	bool has_next_hop_security_details;
+	int next_hop_security_flag;
 
 	// The result (one of the NF_* values)
 	unsigned int result;
