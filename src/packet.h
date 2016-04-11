@@ -3,6 +3,7 @@
 
 #ifdef __KERNEL__
 
+#include <linux/netdevice.h>
 #include <linux/ip.h>
 #include <linux/skbuff.h>
 #include <asm/byteorder.h>
@@ -95,8 +96,15 @@ struct sk_response_payload {
 };
 #define SK_RESPONSE_PAYLOAD_LEN(sk_len) (sizeof(struct sk_response_payload) + sk_len)
 
+struct broadcast_key_exchange_payload {
+	__be16		broadcast_key_len;
+	unsigned char	broadcast_key[0];
+};
+#define BROADCAST_KEY_EXCHANGE_PAYLOAD_LEN(broadcast_key_len) (sizeof(struct broadcast_key_exchange_payload) + broadcast_key_len)
+
 #pragma pack(pop)
 
+inline bool if_info_from_net_device(__be32* addr, __be32* baddr, const struct net_device *dev);
 inline const char* lookup_superman_packet_type_desc(__u8 type);
 inline bool is_superman_packet(struct sk_buff* skb);
 inline struct superman_header* get_superman_header(struct sk_buff *skb);
@@ -111,6 +119,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr);
 void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr, uint32_t sk_len, unsigned char* sk);
 
+void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key);
 void SendInvalidateSKPacket(uint32_t addr);
 
 /*

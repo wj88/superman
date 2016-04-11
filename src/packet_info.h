@@ -38,8 +38,8 @@ struct superman_packet_info
 	void* payload;
 
 	// Address information about the origin/destination of this packet.
-	struct in_addr ifaddr;
-	struct in_addr bcaddr;
+	__be32 ifaddr;
+	__be32 bcaddr;
 	int addr_type;
 
 	// Security information

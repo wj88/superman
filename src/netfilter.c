@@ -273,6 +273,38 @@ unsigned int process_certificate_exchange_with_broadcast_key_packet(struct super
 	return FreeSupermanPacketInfo(spi);
 }
 
+unsigned int process_broadcast_key_exchange_packet(struct superman_packet_info* spi)
+{
+	// NOTE: We need to free our spi.
+
+	uint32_t broadcast_key_len;
+	unsigned char* broadcast_key;
+	struct broadcast_key_exchange_payload* p;
+
+	//printk(KERN_INFO "SUPERMAN: Netfilter - \t\tProcessing the broadcast key exchange...\n");
+	p = (struct broadcast_key_exchange_payload*)spi->payload;
+
+	// Carefully, with plenty of bounds checking, extract the contents of the payload in the component parts.
+	if(ntohs(spi->shdr->payload_len) >= BROADCAST_KEY_EXCHANGE_PAYLOAD_LEN(ntohs(0)) && ntohs(spi->shdr->payload_len) >= BROADCAST_KEY_EXCHANGE_PAYLOAD_LEN(ntohs(p->broadcast_key_len)))
+	{
+		broadcast_key_len = ntohs(p->broadcast_key_len);
+		broadcast_key = p->broadcast_key;
+
+		ReceivedSupermanBroadcastKeyExchange(broadcast_key_len, broadcast_key);
+	}
+	else
+	{
+		printk(KERN_INFO "SUPERMAN: Netfilter - Payload size mismatch, expected: %d, received: %lu.\n", ntohs(spi->shdr->payload_len), BROADCAST_KEY_EXCHANGE_PAYLOAD_LEN(ntohs(p->broadcast_key_len)));
+	}
+
+	spi->use_callback = false;
+	if(spi->result != NF_STOLEN) spi->result = NF_DROP;
+
+	// Cleanup the SPI!
+	printk(KERN_INFO "SUPERMAN: Netfilter - \t\tFinished processing the broadcast key exchange, result: %d.\n", spi->result);
+	return FreeSupermanPacketInfo(spi);
+}
+
 unsigned int process_authenticated_sk_request(struct superman_packet_info* spi)
 {
 	struct security_table_entry* security_details;
@@ -417,6 +449,9 @@ unsigned int hook_localin_remove_e2e(struct superman_packet_info* spi, bool resu
 			case SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE:		// It's a Certificate Exchange With Broadcast Key
 				printk(KERN_INFO "SUPERMAN: Netfilter (hook_localin_remove_e2e) calling process_certificate_exchange_with_broadcast_key_packet...\n");
 				return process_certificate_exchange_with_broadcast_key_packet(spi);
+				break;
+			case SUPERMAN_BROADCAST_KEY_EXCHANGE_TYPE:					// It's a Broadcast Key Exchange
+				return process_broadcast_key_exchange_packet(spi);
 				break;
 		}
 

@@ -12,7 +12,7 @@ void SendSupermanDiscoveryRequest(uint32_t sk_len, unsigned char* sk);
 void SendSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned char* sk);
 void SendSupermanCertificateExchange(uint32_t address, uint32_t certificate_len, unsigned char* certificate);
 void SendSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t certificate_len, unsigned char* certificate);
-void SendSupermanBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key);
+void SendSupermanBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key, bool only_if_changed);
 void SendSupermanSKInvalidate(uint32_t address);
 
 #else

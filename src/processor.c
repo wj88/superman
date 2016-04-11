@@ -64,14 +64,28 @@ void SendSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint32_t 
 	} 
 }
 
-void SendSupermanBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key)
+void SendSupermanBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key, bool only_if_changed)
 {
-	// SendBroadcastKeyExchangePacket(broadcast_key_len, broadcast_key);
+	struct security_table_entry* entry;
+	bool send = true;
+
+	// We can only do this if we already have a broadcast key
+	if(GetSecurityTableEntry(INADDR_BROADCAST, &entry) && entry->flag >= 3)
+	{
+		if(only_if_changed)
+		{
+			if(entry->sk_len == broadcast_key_len && memcmp(entry->sk, broadcast_key, broadcast_key_len) == 0)
+				send = false;
+		}
+
+		if(send)
+			SendBroadcastKeyExchange(broadcast_key_len, broadcast_key);
+	}
 }
 
 void SendSupermanSKInvalidate(uint32_t address)
 {
-	// SendSKInvalidatePacket(address);
+	SendSupermanSKInvalidate(address);
 }
 
 #else
@@ -243,7 +257,8 @@ void ReceivedSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint3
 			{			
 				// This has to be done before we commit the new key.
 				// printf("Processor: \tRequesting a broadcast key update for nodes we're associated with...\n");
-				SendSupermanBroadcastKeyExchange(broadcast_key_len, broadcast_key);
+
+				SendSupermanBroadcastKeyExchange(broadcast_key_len, broadcast_key, true);
 			
 				UpdateSupermanBroadcastKey(broadcast_key_len, broadcast_key, ske_len, ske, skp_len, skp, true);
 

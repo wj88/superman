@@ -1,6 +1,5 @@
 #ifdef __KERNEL__
 
-#include <linux/netdevice.h>
 #include <linux/inetdevice.h>
 #include <linux/skbuff.h>
 #include <linux/version.h>
@@ -68,6 +67,43 @@ struct dst_entry* lookup_dst(struct net_device* dev, uint32_t saddr, uint32_t da
 	return dst;
 }
 
+// A useful function shamelessly stolen from the AODV-UU implementation.
+inline bool if_info_from_net_device(__be32* addr, __be32* baddr, const struct net_device *dev)
+{
+	struct in_device *indev;
+	bool found = false;
+
+	// Hold a reference to the device to prevent it from being freed.
+	indev = in_dev_get(dev);
+	if (indev)
+	{
+		struct in_ifaddr **ifap;
+		struct in_ifaddr *ifa;
+		bool found = false;
+
+		// Search through the list for a matching device name.
+		
+		for (ifap = &indev->ifa_list; (ifa = *ifap) != NULL; ifap = &ifa->ifa_next)
+		{
+			if (!strcmp(dev->name, ifa->ifa_label))
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if(found)
+		{
+			*addr = ifa->ifa_address;
+			*baddr = ifa->ifa_broadcast;
+		}
+
+		// Release our reference to the device.
+		in_dev_put(indev);
+	}
+
+	return found;
+}
 
 inline bool is_superman_packet(struct sk_buff* skb)
 {
@@ -265,6 +301,15 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	void* payload;
 	struct superman_packet_info* spi;
 
+	__be32 addr;
+	__be32 baddr;
+
+	if(!if_info_from_net_device(&addr, &baddr, dev))
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to lookup the IP address info.");
+		continue;
+	}
+
 	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Discovery Request on %s...\n", dev->name);
 
 	// Allocate a new packet
@@ -310,9 +355,9 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	iph->ttl = 1;									// Don't traverse more than one hop for this broadcast packet (ie, do not flood the network).
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
 	iph->check = 0;									// No checksum yet
-	iph->saddr = inet_select_addr(dev, htonl(INADDR_BROADCAST), RT_SCOPE_UNIVERSE);	// Grab the most appropriate address.
+	iph->saddr = inet_select_addr(dev, baddr, RT_SCOPE_UNIVERSE);		// Grab the most appropriate address.
 	//iph->daddr = ((iph->saddr & 0x00FFFFFF) + 0xFF000000),			// Broadcast the message to all on the subnet
-	iph->daddr = htonl(INADDR_BROADCAST);						// Broadcast the message to all on the subnet
+	iph->daddr = baddr;							// Broadcast the message to all on the subnet
 
 	spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
 	send_superman_packet(spi, true);
@@ -836,6 +881,7 @@ void SendInvalidateSKPacket(uint32_t addr)
 
 	struct in_addr;
 	struct sk_buff* tx_sk;
+	struct dst_entry* dst;		
 	struct superman_header* shdr;
 	struct iphdr* iph;
 	void* payload;
@@ -892,8 +938,20 @@ void SendInvalidateSKPacket(uint32_t addr)
 	tx_sk->sk = NULL;
 	ip_send_check(iph);
 
-	if(ip_local_out(tx_sk) == NF_DROP)
-		kfree_skb(tx_sk);	
+	dst = lookup_dst(dev, iph->saddr, iph->daddr);
+	if(dst)
+	{
+		skb_dst_set(tx_sk, dst);
+		tx_sk->dev = dst->dev;
+
+		if(ip_local_out(tx_sk) == NF_DROP)
+			kfree_skb(tx_sk);
+	}
+	else
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - Routing failed.\n");
+		kfree_skb(tx_sk);
+	}
 
 	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
 	//AddE2ESecurity(spi, hash_then_send_superman_packet);
@@ -911,15 +969,16 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 
 	struct in_addr;
 	struct sk_buff* tx_sk;
+	struct dst_entry* dst;		
 	struct superman_header* shdr;
 	struct iphdr* iph;
 	void* payload;
 	//struct superman_packet_info* spi;
 
-	// printk(KERN_INFO "SUPERMAN: Packet - \tSend SK Invalidate...\n");
+	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Broadcast Key Exchange...\n");
 
 	// Allocate a new packet
-	tx_sk = alloc_skb(sizeof(struct iphdr) + SUPERMAN_HEADER_LEN + sizeof(__be16) + broadcast_key_len, GFP_KERNEL);
+	tx_sk = alloc_skb(sizeof(struct iphdr) + SUPERMAN_HEADER_LEN + BROADCAST_KEY_EXCHANGE_PAYLOAD_LEN(broadcast_key_len), GFP_KERNEL);
 	if(tx_sk == NULL)
 	{
 		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
@@ -938,16 +997,19 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	// |  BKey len | BKey           |
 	// ------------------------------
 
-	payload = skb_put(tx_sk, broadcast_key_len + sizeof(__be16));
-	*((__be16*)payload) = htons(broadcast_key_len);
-	memcpy(payload + sizeof(__be16), broadcast_key, broadcast_key_len);
+	payload = skb_put(tx_sk, BROADCAST_KEY_EXCHANGE_PAYLOAD_LEN(broadcast_key_len));
+	{
+		struct broadcast_key_exchange_payload* p = (struct broadcast_key_exchange_payload*)payload;
+		p->broadcast_key_len = htons(broadcast_key_len);
+		memcpy(p->broadcast_key, broadcast_key, broadcast_key_len);
+	}
 
 	// Setup the superman header
 	shdr = (struct superman_header*) skb_push(tx_sk, SUPERMAN_HEADER_LEN);
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_SK_INVALIDATE_TYPE;					// We're preparing a broadcast key exchange packet.
 	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(INADDR_BROADCAST)));		// This will be a unique counter value for each packet, cycling round.
-	shdr->payload_len = htons(sizeof(__be16) + broadcast_key_len);			// A broadcast key exchange packet contains a broadcast key.
+	shdr->payload_len = htons(BROADCAST_KEY_EXCHANGE_PAYLOAD_LEN(broadcast_key_len));	// A broadcast key exchange packet contains a broadcast key.
 
 	// Setup the IP header
 	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -968,14 +1030,27 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	tx_sk->sk = NULL;
 	ip_send_check(iph);
 
-	if(ip_local_out(tx_sk) == NF_DROP)
-		kfree_skb(tx_sk);	
+	dst = lookup_dst(dev, iph->saddr, iph->daddr);
+	if(dst)
+	{
+		skb_dst_set(tx_sk, dst);
+		tx_sk->dev = dst->dev;
+
+		if(ip_local_out(tx_sk) == NF_DROP)
+			kfree_skb(tx_sk);
+	}
+	else
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - Routing failed.\n");
+		kfree_skb(tx_sk);
+	}
 
 	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
 	//AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	INTERFACE_ITERATOR_END
 	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send Broadcast Key Exchange done.\n");
+
 }
 
 #endif

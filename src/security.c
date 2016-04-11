@@ -320,21 +320,20 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 
 	// Start with a zero checksum.
 	spi->iph->check = 0;
-	spi->shdr->last_addr = htonl(0);
 
 	// We have a key to use, load it into the crypto process.
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key:\n");
-	// dump_bytes(spi->e2e_security_details->ske, spi->e2e_security_details->ske_len);
+	// dump_bytes(spi->security_details->ske, spi->security_details->ske_len);
 	err = crypto_aead_setkey(aead, spi->e2e_security_details->ske, spi->e2e_security_details->ske_len);
 	if(err < 0)
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Failed to set the security key");
-		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key len: %u, Key %u, err: %d, flags: %x.\n", spi->security_details->ske_len, (uint32_t)(spi->security_details->ske), err, crypto_aead_get_flags(aead));
+		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key len: %u, Key %u, err: %d, flags: %x.\n", spi->e2e_security_details->ske_len, (uint32_t)(spi->e2e_security_details->ske), err, crypto_aead_get_flags(aead));
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
 
-	//printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key len: %u, Key %u, err: %d, flags: %x.\n", spi->security_details->ske_len, *(uint32_t*)(spi->security_details->ske), err, crypto_aead_get_flags(aead));
+	//printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key len: %u, Key %u, err: %d, flags: %x.\n", spi->e2e_security_details->ske_len, *(uint32_t*)(spi->e2e_security_details->ske), err, crypto_aead_get_flags(aead));
 
 	// Auth bytes len
 	auth_len = crypto_aead_authsize(aead);
@@ -367,12 +366,14 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 		return NF_DROP;
 	}	
 
-	// Make sure the buffer is linear or direct manipulation will likely fail.
-	skb_linearize(spi->skb);
-	nfrags = skb_cow_data(spi->skb, 0, &trailer);
+	// Increment the IP header to match the increase in packet size.
+	spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) + padding_len + auth_len);
 
 	// Reserve the space in the skb for our padding to fill the block size.
-	tail = skb_put(spi->skb, padding_len + auth_len);
+	tail = pskb_put(spi->skb, trailer, padding_len + auth_len);
+
+	// Make sure the buffer is linear or direct manipulation will likely fail.
+	// skb_linearize(spi->skb);
 
 	// Fill the padding with known data.
 	for (i = 0; i < padding_len; i++)
@@ -382,9 +383,6 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	for (i = padding_len; i < padding_len + MAC_LEN; i++)
 		tail[i] = 0;
 
-	// Increment the IP header to match the increase in packet size.
-	spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) + padding_len + auth_len);
-
 	// No longer checksumed
 	// spi->skb->ip_summed = CHECKSUM_NONE;
 
@@ -392,7 +390,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	seqhilen = 0;
 
 	// Allocate some memory attached to spi->tmp to host the scatter list.
-	if(!alloc_tmp_e2e(spi, aead, nfrags /* + sglists */, seqhilen))
+	if(!alloc_tmp_e2e(spi, aead, nfrags, seqhilen))
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - alloc_tmp_e2e failed.\n");
 		spi->result = NF_DROP;
@@ -456,11 +454,11 @@ unsigned int RemoveE2ESecurityDone(struct superman_packet_info* spi, unsigned in
 		// The bloated payload (payload rounded up to the nearest block size)
 		aligned_payload_len = ALIGN(ntohs(spi->shdr->payload_len), blksize);
 
-		// Trim the excess off the end, leaving the unencrypted payload and headers.
-		pskb_trim(spi->skb, spi->skb->len - (aligned_payload_len - ntohs(spi->shdr->payload_len)) - MAC_LEN);
-
 		// Reduce the IP header size.
 		spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) - (aligned_payload_len - ntohs(spi->shdr->payload_len)) - MAC_LEN);
+
+		// Trim the excess off the end, leaving the unencrypted payload and headers.
+		pskb_trim(spi->skb, spi->skb->len - (aligned_payload_len - ntohs(spi->shdr->payload_len)) - MAC_LEN);
 
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - Packet length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - Packet contents:\n");
@@ -515,33 +513,32 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	struct scatterlist *sg;
 	struct aead_request *req;
 
-/*
-			Transformation during E2E removal.
+//			Transformation during E2E removal.
+//
+//	----------------------------------------------------------------------------------
+//	| IP Header | SUPERMAN Header | Encrypted Payload		| Padding | Auth |
+//	----------------------------------------------------------------------------------
+//					|
+//					v
+//			      ---------------------
+//			      | RemoveE2ESecurity |
+//			      ---------------------
+//					|
+//					v
+//	----------------------------------------------------------------------------------
+//	| IP Header | SUPERMAN Header | Payload				| Padding | Auth |
+//	----------------------------------------------------------------------------------
+//					|
+//					v
+//			    -------------------------
+//			    | RemoveE2ESecurityDone |
+//			    -------------------------
+//					|
+//					v
+//	-----------------------------------------------------------------
+//	| IP Header | SUPERMAN Header | Payload				|
+//	-----------------------------------------------------------------
 
-	----------------------------------------------------------------------------------
-	| IP Header | SUPERMAN Header | Encrypted Payload		| Padding | Auth |
-	----------------------------------------------------------------------------------
-					|
-					v
-			      ---------------------
-			      | RemoveE2ESecurity |
-			      ---------------------
-					|
-					v
-	----------------------------------------------------------------------------------
-	| IP Header | SUPERMAN Header | Payload				| Padding | Auth |
-	----------------------------------------------------------------------------------
-					|
-					v
-			    -------------------------
-			    | RemoveE2ESecurityDone |
-			    -------------------------
-					|
-					v
-	-----------------------------------------------------------------
-	| IP Header | SUPERMAN Header | Payload				|
-	-----------------------------------------------------------------
-*/
 
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Removing E2E security...\n");
 
@@ -563,7 +560,6 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 
 	// Start with a zero checksum.
 	spi->iph->check = 0;
-	spi->shdr->last_addr = htonl(0);
 	
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet contents:\n");
@@ -571,7 +567,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 
 	// We have a key to use, load it into the crypto process.
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Key:\n");
-	// dump_bytes(spi->security_details->ske, spi->security_details->ske_len);
+	// dump_bytes(spi->security_details->ske, spi->e2e_security_details->ske_len);
 	if(crypto_aead_setkey(aead, spi->e2e_security_details->ske, spi->e2e_security_details->ske_len) < 0)
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Failed to set the security key.\n");
@@ -601,9 +597,6 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	// Size of the associated data
 	assoc_len = sizeof(struct iphdr) + sizeof(struct superman_header);
 
-	// Make sure the buffer is linear or direct manipulation will likely fail.
-	skb_linearize(spi->skb);
-
 	// Grab the scatterlist length whilst ensuring we have space for the currently not added data padding data.
 	nfrags = skb_cow_data(spi->skb, 0, &trailer);
 	if(nfrags < 0)
@@ -618,7 +611,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	seqhilen = 0;
 
 	// Allocate some memory attached to spi->tmp to host the scatter list.
-	if(!alloc_tmp_e2e(spi, aead, nfrags /* + sglists */, seqhilen))
+	if(!alloc_tmp_e2e(spi, aead, nfrags, seqhilen))
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - alloc_tmp_e2e failed.\n");
 		spi->result = NF_DROP;
@@ -677,13 +670,8 @@ unsigned int AddP2PSecurityDone(struct superman_packet_info* spi, unsigned int (
 		// Make sure there is space for our HMAC to go at the end of the data.
 		if(skb_cow_data(spi->skb, HMAC_LEN, &trailer) >= 0)
 		{
-			unsigned char* tail;
-
-			// Make sure the buffer is linear or direct manipulation will likely fail.
-			skb_linearize(spi->skb);
-
 			// Grab the space for the correct number of bytes. 
-			tail = skb_put(spi->skb, HMAC_LEN);
+			unsigned char* tail = pskb_put(spi->skb, trailer, HMAC_LEN);
 
 			// Copy the HMAC into the allocated space.
 			memcpy(tail, spi->tmp, HMAC_LEN);
@@ -741,8 +729,6 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Packet contents:\n");
 	// dump_packet(spi->skb);
 
-	spi->shdr->last_addr = spi->p2p_our_addr;
-
 	// If we don't need to secure this packet, accept it.
 	if(!spi->p2p_secure_packet)
 	{
@@ -754,7 +740,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	// If we don't have the security details.
 	if(!spi->p2p_has_security_details)
 	{
-		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - We don't have the next hops security details.\n");
+		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - We don't have their security details.\n");
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
@@ -767,9 +753,6 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
-
-	// Make sure the buffer is linear or direct manipulation will likely fail.
-	skb_linearize(spi->skb);
 
 	// Grab the scatterlist length.
 	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Calling skb_cow_data...\n");
@@ -885,8 +868,6 @@ unsigned int RemoveP2PSecurityDone(struct superman_packet_info* spi, unsigned in
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - Packet contents:\n");
 		// dump_packet(spi->skb);
 
-		spi->shdr->last_addr = htonl(0);
-
 		ip_send_check(spi->iph);
 	}
 	else
@@ -953,9 +934,6 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 		spi->result = NF_DROP;
 		return NF_DROP;
 	}
-
-	// Make sure the buffer is linear or direct manipulation will likely fail.
-	skb_linearize(spi->skb);
 
 	// Grab the scatterlist length.
 	nfrags = skb_cow_data(spi->skb, 0, &trailer);

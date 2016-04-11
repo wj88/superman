@@ -23,46 +23,6 @@ uint16_t GetNextTimestampFromSupermanPacketInfo(struct superman_packet_info* spi
 }
 */
 
-// A useful function shamelessly stolen from the AODV-UU implementation.
-static inline int if_info_from_net_device(struct in_addr *addr, struct in_addr *baddr, const struct net_device *dev)
-{
-	struct in_device *indev;
-	bool found = false;
-
-	// Hold a reference to the device to prevent it from being freed.
-	indev = in_dev_get(dev);
-	if (indev)
-	{
-		struct in_ifaddr **ifap;
-		struct in_ifaddr *ifa;
-		bool found = false;
-
-		// Search through the list for a matching device name.
-		
-		for (ifap = &indev->ifa_list; (ifa = *ifap) != NULL; ifap = &ifa->ifa_next)
-		{
-			if (!strcmp(dev->name, ifa->ifa_label))
-			{
-				found = true;
-				break;
-			}
-		}
-
-		if(found)
-		{
-			if (addr)
-				addr->s_addr = ifa->ifa_address;
-			if (baddr)
-				baddr->s_addr = ifa->ifa_broadcast;
-		}
-
-		// Release our reference to the device.
-		in_dev_put(indev);
-	}
-
-	return found;
-}
-
 struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
@@ -128,26 +88,17 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	}
 
 	// Address information about the origin/destination of this packet.	
-	if(spi->ifaddr.s_addr == spi->e2e_addr)
+	if(spi->ifaddr == spi->e2e_addr)
 		spi->addr_type = IS_MYADDR;
 	else if(ipv4_is_loopback(spi->e2e_addr))
 		spi->addr_type = IS_LOOPBACK;
 	else if(ipv4_is_multicast(spi->e2e_addr) || ipv4_is_local_multicast(spi->e2e_addr))
 		spi->addr_type = IS_MULTICAST;
-	else if(ipv4_is_lbcast(spi->e2e_addr) || spi->e2e_addr == spi->bcaddr.s_addr)
+	else if(ipv4_is_lbcast(spi->e2e_addr) || spi->e2e_addr == spi->bcaddr)
 		spi->addr_type = IS_BROADCAST;
 	else
 		spi->addr_type = IS_OTHER;
 
-	// Deal with the special case of SK requests
-	if(spi->shdr != NULL && (spi->shdr->type == SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE || spi->shdr->type == SUPERMAN_AUTHENTICATED_SK_RESPONSE_TYPE))
-	{
-		spi->e2e_secure_packet = true;
-		spi->p2p_secure_packet = true;
-		spi->e2e_use_broadcast_key = true;
-		spi->p2p_use_broadcast_key = false;
-	}
-	else
 	{
 		// Security information
 		switch(spi->addr_type)
@@ -178,6 +129,21 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 				spi->e2e_use_broadcast_key = false;
 				spi->p2p_secure_packet = true;
 				spi->p2p_use_broadcast_key = false;
+				break;
+		}
+	}
+
+	// Deal with the special case of SK requests
+	if(spi->shdr != NULL)
+	{
+		switch(spi->shdr->type)
+		{
+			// For certain packet types, we use the broadcast key for e2e (although not for p2p)
+			case SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE:
+			case SUPERMAN_AUTHENTICATED_SK_RESPONSE_TYPE:
+			case SUPERMAN_BROADCAST_KEY_EXCHANGE_TYPE:
+			case SUPERMAN_SK_INVALIDATE_TYPE:
+				spi->e2e_use_broadcast_key = true;
 				break;
 		}
 	}
