@@ -1,6 +1,5 @@
 ifeq ($(KERNELRELEASE),)
 
-#KBUILD_CFLAGS := $KBUILD_CFLAGS -fno-stack-protector
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 
@@ -11,14 +10,15 @@ build:
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
-	rm ../src/*.o
+	-rm ../src/*.o
 
 else
 
-$(info $(KERNELDIR))
-$(info Building Superman with KERNELRELEASE = ${KERNELRELEASE})
+OBJS=$(patsubst %.c,%.o,$(shell cd $(M); find ../src/ -name '*.c'))
+
+$(info Building SUPERMAN kernel module for kernel version ${KERNELRELEASE})
 
 obj-m := superman.o
-superman-y := ../src/packet_info.o ../src/netfilter.o ../src/packet.o ../src/queue.o ../src/security_table.o ../src/interfaces_table.o ../src/security.o ../src/proc.o ../src/netlink.o ../src/processor.o ../src/init.o
+superman-y := $(OBJS)
 
 endif

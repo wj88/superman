@@ -3,7 +3,7 @@
 . ./common.sh
 
 if [ "$1" = "clean" ]; then
-	echob Cleaning up...
+	echo Cleaning up...
 	rm -Rf openssl pkgs initrd initrd-prereqs
 	rm -f initrd.img-custom
 	exit
@@ -13,30 +13,30 @@ fi
 . ./openssl_install.sh
 
 if [[ ! -d ./initrd-prereqs ]]; then
-	echob Preparing prerequisits...
+	echo Preparing prerequisits...
 	prereqInstall ./initrd-prereqs
 	opensslInstallInto ./initrd-prereqs
 fi
 
 aptInstall "libnl-3-dev libnl-genl-3-dev pigz"
 
-echob Building the SUPERMAN kernel module...
-cd ../kernel-module
-make
-cd ../test
+#echob Building the SUPERMAN kernel module...
+#cd ../kernel-module
+#make
+#cd ../test
 
-echob Building the SUPERMAN daemon...
-cd ../daemon
-make
-cd ../test
+#echob Building the SUPERMAN daemon...
+#cd ../daemon
+#make
+#cd ../test
 
-echob Preparing the initrd directory...
+echo Preparing the initrd directory...
 [ -d ./initrd ] && rm -R initrd
 
-echob Extracting the base initrd image...
+echo Extracting the base initrd image...
 initrdExtract "/boot/initrd.img-`uname -r`" ./initrd
 
-echob Integrating the changes....
+echo Integrating the changes....
 
 # Copy in the prereqs
 cp -R initrd-prereqs/* ./initrd/
@@ -56,8 +56,8 @@ echo kernel/net/superman/superman.ko: kernel/crypto/cryptd.ko >> ./initrd/lib/mo
 # Copy over the SUPERMAN daemon
 cp ../daemon/superman ./initrd/bin
 
-echob Creating the custom initrd image...
+echo Creating the custom initrd image...
 initrdCreate ./initrd ./initrd.img-custom
 
-echob Done.
+# echo Done.
 #rm -R initrd

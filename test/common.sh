@@ -87,7 +87,7 @@ initrdExtract()
 	local FULL_SOURCE_IMG="$(readlink -f ${SOURCE_IMG})"
 	local TARGET_PATH="$2"
 
-	echob Extracting ${SOURCE_IMG}...
+	#echo Extracting ${SOURCE_IMG}...
 	[ -d ${TARGET_PATH} ] || mkdir -p ${TARGET_PATH}
 
 	pushd ${TARGET_PATH} >/dev/null
@@ -100,7 +100,7 @@ initrdCreate()
 	local SOURCE_PATH="$1"
 	local TARGET_IMG="$2"
 	local FULL_TARGET_IMG="$(readlink -f ${TARGET_IMG})"
-	echob Creating ${TARGET_IMG}...
+	#echo Creating ${TARGET_IMG}...
 	if [ -d ${SOURCE_PATH} ]; then
 
 		pushd ${SOURCE_PATH} >/dev/null
