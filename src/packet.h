@@ -47,9 +47,31 @@ struct superman_header {
 	__u8	type;
 	__be16	timestamp;
 	__be16	payload_len;
-	__be32	last_node;
+	__be32	last_addr;
 };
 #define SUPERMAN_HEADER_LEN sizeof(struct superman_header)
+
+struct certificate_exchange_payload {
+	//     2 bytes      | certificate_len
+	// -----------------------------------
+	//  certificate_len |   certificate    
+	// -----------------------------------
+	__be16		certificate_len;
+	unsigned char	certificate[0];
+};
+#define CERTIFICATE_EXCHANGE_PAYLOAD_LEN(certificate_len) (sizeof(struct certificate_exchange_payload) + certificate_len)
+
+struct certificate_exchange_with_broadcast_key_payload {
+	//      2 bytes     |     2 bytes       |  certificate_len     | broadcast_key_len
+	// --------------------------------------------------------------------------------
+	//   certificte_len | broadcast_key_len |    certificate       |   broadcast_key       
+	// --------------------------------------------------------------------------------
+	__be16		certificate_len;
+	__be16		broadcast_key_len;
+	unsigned char	data[0];
+};
+#define CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_PAYLOAD_LEN(certificate_len, broadcast_key_len) (sizeof(struct certificate_exchange_with_broadcast_key_payload) + certificate_len + broadcast_key_len)
+
 
 struct sk_request_payload {
 	//    4 bytes    |   4 bytes  

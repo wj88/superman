@@ -40,23 +40,24 @@ struct superman_packet_info
 	// Address information about the origin/destination of this packet.
 	struct in_addr ifaddr;
 	struct in_addr bcaddr;
-	__be32 addr;
 	int addr_type;
 
 	// Security information
-	bool secure_packet;
-	bool use_broadcast_key;
 
 	// End to end
-	struct security_table_entry* security_details;
-	bool has_security_details;
-	int security_flag;
+	__be32 e2e_addr;		// The address of the other end (destination or source)
+	bool e2e_secure_packet;
+	bool e2e_use_broadcast_key;
+	struct security_table_entry* e2e_security_details;
+	bool e2e_has_security_details;
 
-	// Next hop details
-	__be32 next_hop_addr;
-	struct security_table_entry* next_hop_security_details;
-	bool has_next_hop_security_details;
-	int next_hop_security_flag;
+	// Point to point
+	__be32 p2p_our_addr;
+	__be32 p2p_neighbour_addr;
+	bool p2p_secure_packet;
+	bool p2p_use_broadcast_key;
+	struct security_table_entry* p2p_security_details;
+	bool p2p_has_security_details;
 
 	// The result (one of the NF_* values)
 	unsigned int result;
@@ -65,6 +66,11 @@ struct superman_packet_info
 	// Temporary storage locations for use by any phase of the process as appropriate.
 	void* arg;
 	void* tmp;
+
+	// Queue support
+	__be32 queue_addr;
+	struct timeval queue_entry_time;
+	
 
 	// Temporary spi identifier
 	uint32_t id;

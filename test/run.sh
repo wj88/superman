@@ -37,6 +37,8 @@ startQemu()
 	echob Starting QEMU emulation for node ${NODE_ID}...
 	bash -c "qemu-system-x86_64 ${QEMU_ARGS}"
 
+	read -p "Press any key to exit..."
+
 	[ -e /tmp/superman-node${NODE_ID} ] && sudo chmod 666 /tmp/superman-node${NODE_ID}.pcap
 }
 
@@ -44,7 +46,7 @@ startQemu()
 if [ "$0" = "$BASH_SOURCE" ]; then
 	NODE_ID="$1"
 	[ "${NODE_ID}" = "" ] && NODE_ID="2"
-	
+
 	if [ "$2" = "" ]; then
 		startTerm "${NODE_ID}"
 	else

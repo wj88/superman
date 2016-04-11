@@ -1,6 +1,7 @@
 #ifdef __KERNEL__
 
 #include <linux/netdevice.h>
+#include <net/route.h>
 #include "packet_info.h"
 #include "packet.h"
 #include "security.h"
@@ -67,7 +68,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	struct superman_packet_info* spi;
 	++superman_packet_info_count;
 	++superman_packet_info_id_counter;
-	printk(KERN_INFO "SUPERMAN: packet_info: \tAllocating a new superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, superman_packet_info_id_counter);
+	// printk(KERN_INFO "SUPERMAN: packet_info: \tAllocating a new superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, superman_packet_info_id_counter);
 
 	spi = kmalloc(sizeof(struct superman_packet_info), GFP_ATOMIC);
 	if(spi == NULL)
@@ -83,6 +84,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 
 	// Packet arrival isn't always linear which breaks things. Fix that here.
 	skb_linearize(skb);
+
 	//printk(KERN_INFO "SUPERMAN: packet_info: IP Offset: %d, Transport Offset: %d, Transport*: %lu.\n", skb_network_offset(skb), skb_transport_offset(skb), (unsigned long)(skb_transport_header(skb)-skb_network_header(skb)));
 	//printk(KERN_INFO "SUPERMAN: packet_info: IP Header:\n");
 	//dump_bytes(skb_network_header(skb), skb_network_header_len(skb));
@@ -111,73 +113,125 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	{
 		if(spi->state->in != NULL)
 			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->state->in);
-		spi->addr = spi->iph->saddr;
+		spi->e2e_addr = spi->iph->saddr;
 	}
 	else if(spi->ops != NULL && (spi->ops->hooknum == NF_INET_POST_ROUTING || spi->ops->hooknum == NF_INET_LOCAL_OUT || spi->ops->hooknum == NF_INET_FORWARD))
 	{
 		if(spi->state->out != NULL)
 			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->state->out);
-		spi->addr = spi->iph->daddr;
+		spi->e2e_addr = spi->iph->daddr;
 	}
 	// If all else fails, we probably generated this packet ourselves.
 	else
 	{
-		spi->addr = spi->iph->daddr;
+		spi->e2e_addr = spi->iph->daddr;
 	}
 
 	// Address information about the origin/destination of this packet.	
-	if(spi->ifaddr.s_addr == spi->addr)
+	if(spi->ifaddr.s_addr == spi->e2e_addr)
 		spi->addr_type = IS_MYADDR;
-	else if(ipv4_is_loopback(spi->addr))
+	else if(ipv4_is_loopback(spi->e2e_addr))
 		spi->addr_type = IS_LOOPBACK;
-	else if(ipv4_is_multicast(spi->addr) || ipv4_is_local_multicast(spi->addr))
+	else if(ipv4_is_multicast(spi->e2e_addr) || ipv4_is_local_multicast(spi->e2e_addr))
 		spi->addr_type = IS_MULTICAST;
-	else if(ipv4_is_lbcast(spi->addr) || spi->addr == spi->bcaddr.s_addr)
+	else if(ipv4_is_lbcast(spi->e2e_addr) || spi->e2e_addr == spi->bcaddr.s_addr)
 		spi->addr_type = IS_BROADCAST;
 	else
 		spi->addr_type = IS_OTHER;
 
 	// Deal with the special case of SK requests
 	if(spi->shdr != NULL && (spi->shdr->type == SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE || spi->shdr->type == SUPERMAN_AUTHENTICATED_SK_RESPONSE_TYPE))
-		spi->addr_type = IS_BROADCAST;
-
-	// Security information
-	switch(spi->addr_type)
 	{
-		case IS_MYADDR:
-		case IS_LOOPBACK:
-			// printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is from me or is a loopback packet.\n");
-#ifdef ENCRYPT_LOCAL
-			spi->secure_packet = true;
-#else
-			spi->secure_packet = false;
-#endif
-			spi->use_broadcast_key = false;
-			break;
-		case IS_MULTICAST:
-		case IS_BROADCAST:
-			// printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is a broadcast or multicast packet.\n");
-			spi->secure_packet = true;
-			spi->use_broadcast_key = true;
-			break;
-		default:
-			spi->secure_packet = true;
-			spi->use_broadcast_key = false;
-			break;
-	}
-	spi->security_flag = 3;
-
-	// If we should use the broadcast key and we don't have one. 
-	if(spi->use_broadcast_key && (!GetSecurityTableEntry(INADDR_BROADCAST, &(spi->security_details))))
-		spi->has_security_details = false;
-	// If it isn't a broadcast packet and we don't have the targets key.
-	else if(!spi->use_broadcast_key && (!GetSecurityTableEntry(spi->addr, &(spi->security_details))))
-	{
-		// printk(KERN_INFO "SUPERMAN: packet_info: GetSecurityTableEntry reported no entry for %d.%d.%d.%d.\n", 0x0ff & spi->addr, 0x0ff & (spi->addr >> 8), 0x0ff & (spi->addr >> 16), 0x0ff & (spi->addr >> 24));
-		spi->has_security_details = false;
+		spi->e2e_secure_packet = true;
+		spi->p2p_secure_packet = true;
+		spi->e2e_use_broadcast_key = true;
+		spi->p2p_use_broadcast_key = false;
 	}
 	else
-		spi->has_security_details = true;
+	{
+		// Security information
+		switch(spi->addr_type)
+		{
+			case IS_MYADDR:
+			case IS_LOOPBACK:
+				// printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is from me or is a loopback packet.\n");
+	#ifdef ENCRYPT_LOCAL
+				spi->e2e_secure_packet = true;
+				spi->p2p_secure_packet = true;
+	#else
+				spi->e2e_secure_packet = false;
+				spi->p2p_secure_packet = false;
+	#endif
+				spi->e2e_use_broadcast_key = false;
+				spi->p2p_use_broadcast_key = false;
+				break;
+			case IS_MULTICAST:
+			case IS_BROADCAST:
+				// printk(KERN_INFO "SUPERMAN: packet_info - \tPacket is a broadcast or multicast packet.\n");
+				spi->e2e_secure_packet = true;
+				spi->p2p_secure_packet = true;
+				spi->e2e_use_broadcast_key = true;
+				spi->p2p_use_broadcast_key = true;
+				break;
+			default:
+				spi->e2e_secure_packet = true;
+				spi->e2e_use_broadcast_key = false;
+				spi->p2p_secure_packet = true;
+				spi->p2p_use_broadcast_key = false;
+				break;
+		}
+	}
+
+	// If we're dealing with LOCAL_OUT or LOCAL_IN we'll be needing the E2E security details.
+	if(spi->ops != NULL && (spi->ops->hooknum == NF_INET_LOCAL_OUT || spi->ops->hooknum == NF_INET_LOCAL_IN))
+	{
+		// If we should use the broadcast key and we don't have one. 
+		if(spi->e2e_use_broadcast_key && (!GetSecurityTableEntry(INADDR_BROADCAST, &(spi->e2e_security_details))))
+			spi->e2e_has_security_details = false;
+		// If it isn't a broadcast packet and we don't have the targets key.
+		else if(!spi->e2e_use_broadcast_key && (!GetSecurityTableEntry(spi->e2e_addr, &(spi->e2e_security_details))))
+		{
+			// printk(KERN_INFO "SUPERMAN: packet_info: GetSecurityTableEntry reported no entry for %d.%d.%d.%d.\n", 0x0ff & spi->addr, 0x0ff & (spi->addr >> 8), 0x0ff & (spi->addr >> 16), 0x0ff & (spi->addr >> 24));
+			spi->e2e_has_security_details = false;
+		}
+		else
+			spi->e2e_has_security_details = true;
+	}
+
+	// If we're dealing with PRE_ROUTING OR POST_ROUTING we'll be needing the P2P security details. 
+	if(spi->ops != NULL && (spi->ops->hooknum == NF_INET_POST_ROUTING || spi->ops->hooknum == NF_INET_PRE_ROUTING))
+	{
+		// Lookup the next hop and grab the security credentials
+		if(spi->p2p_use_broadcast_key)
+		{
+			spi->p2p_our_addr = htonl(0);
+			spi->p2p_neighbour_addr = htonl(0);
+			spi->p2p_has_security_details = GetSecurityTableEntry(INADDR_BROADCAST, &(spi->p2p_security_details));
+		}
+		else
+		{
+			struct rtable* rt;
+			struct flowi4 fl4;
+			memset(&fl4, 0, sizeof(fl4));
+			fl4.daddr = spi->e2e_addr;
+			fl4.flowi4_flags = 0x08;
+		 	rt = ip_route_output_key(&init_net, &fl4);
+		 	if (IS_ERR(rt))
+			{
+				printk(KERN_INFO "SUPERMAN: Netfilter - \tip_route_output_key error!\n");
+				spi->p2p_has_security_details = false;
+			}
+
+			// Do we have a gateway?
+			if (rt->rt_gateway)
+				spi->p2p_neighbour_addr = rt->rt_gateway;
+			else
+				spi->p2p_neighbour_addr = spi->e2e_addr;
+
+			spi->p2p_our_addr = inet_select_addr(rt->dst.dev, spi->p2p_neighbour_addr, RT_SCOPE_UNIVERSE);
+			spi->p2p_has_security_details = GetSecurityTableEntry(spi->p2p_neighbour_addr, &(spi->p2p_security_details));
+		}
+	}
 
 	// The result (one of the NF_* values)
 	spi->result = NF_DROP;
@@ -209,6 +263,7 @@ unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi)
 	}
 	else if(!spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)
 	{
+	 	printk(KERN_INFO "SUPERMAN: packet_info: \tFreeing the sk_buff...\n");
 		kfree_skb(spi->skb);
 		spi->skb = NULL;
 	}

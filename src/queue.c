@@ -105,9 +105,11 @@ void FlushQueue(void)
 	write_unlock_bh(&queue_lock);
 }
 
-int EnqueuePacket(struct superman_packet_info* spi, unsigned int (*callback_after_queue)(struct superman_packet_info*, bool))
+int EnqueuePacket(struct superman_packet_info* spi, __be32 addr, unsigned int (*callback_after_queue)(struct superman_packet_info*, bool))
 {
 	int status = -EINVAL;
+	spi->queue_addr = addr;
+	do_gettimeofday(&spi->queue_entry_time);
 	spi->arg = callback_after_queue;
 
 	/* printk("enquing packet queue_len=%d\n", queue_total); */
@@ -124,18 +126,18 @@ err_out_unlock:
 	return status;
 }
 
-static inline int dest_cmp(struct superman_packet_info* spi, unsigned long daddr)
+static inline int addr_cmp(struct superman_packet_info* spi, unsigned long addr)
 {
-	return (daddr == spi->addr);
+	return (addr == spi->queue_addr);
 }
 
-int FindQueuedPacket(__u32 daddr)
+int FindQueuedPacket(__be32 addr)
 {
 	struct superman_packet_info* spi;
 	int res = 0;
 
 	read_lock_bh(&queue_lock);
-	spi = __queue_find_entry(dest_cmp, daddr);
+	spi = __queue_find_entry(addr_cmp, addr);
 	if (spi != NULL)
 		res = 1;
 
@@ -143,7 +145,7 @@ int FindQueuedPacket(__u32 daddr)
 	return res;
 }
 
-int SetVerdict(int verdict, __u32 daddr)
+int SetVerdict(int verdict, __be32 addr)
 {
 	struct superman_packet_info* spi;
 	int pkts = 0;
@@ -151,7 +153,7 @@ int SetVerdict(int verdict, __u32 daddr)
 	if (verdict == SUPERMAN_QUEUE_DROP)
 	{
 		while (1) {
-			spi = queue_find_dequeue_entry(dest_cmp, daddr);
+			spi = queue_find_dequeue_entry(addr_cmp, addr);
 
 			if (spi == NULL)
 				return pkts;
@@ -172,7 +174,7 @@ int SetVerdict(int verdict, __u32 daddr)
 		unsigned int (*callback_after_queue)(struct superman_packet_info*, bool);
 
 		while (1) {
-			spi = queue_find_dequeue_entry(dest_cmp, daddr);
+			spi = queue_find_dequeue_entry(addr_cmp, addr);
 
 			if (spi == NULL)
 				return pkts;
@@ -180,7 +182,7 @@ int SetVerdict(int verdict, __u32 daddr)
 			callback_after_queue = (unsigned int (*)(struct superman_packet_info*, bool)) spi->arg;
 			spi->arg = NULL;
 
-			if (GetSecurityTableEntry(daddr, &entry))
+			if (GetSecurityTableEntry(addr, &entry))
 				callback_after_queue(spi, true);
 			else
 				callback_after_queue(spi, false);
@@ -208,7 +210,7 @@ int queue_info_proc_show(struct seq_file *m, void *v)
 		
 		for(i = 0; i < countAddrs; i++)
 		{
-			if(spi->addr == addrs[i])
+			if(spi->queue_addr == addrs[i])
 			{
 				found = true;
 				break;
@@ -216,7 +218,7 @@ int queue_info_proc_show(struct seq_file *m, void *v)
 		}
 
 		if(!found)
-			addrs[countAddrs++] = spi->addr;
+			addrs[countAddrs++] = spi->queue_addr;
 	}
 
 
@@ -232,7 +234,7 @@ int queue_info_proc_show(struct seq_file *m, void *v)
 
 		list_for_each(a, &queue_list) {
 			struct superman_packet_info *spi = (struct superman_packet_info*)a;
-			if(addrs[i] == spi->addr)
+			if(addrs[i] == spi->queue_addr)
 				count++;
 		}
 

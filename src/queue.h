@@ -10,7 +10,7 @@
 #define SUPERMAN_QUEUE_SEND 2
 
 int FindQueuedPacket(__u32 daddr);
-int EnqueuePacket(struct superman_packet_info* spi, unsigned int (*callback_after_queue)(struct superman_packet_info*, bool));
+int EnqueuePacket(struct superman_packet_info* spi, __be32 addr, unsigned int (*callback_after_queue)(struct superman_packet_info*, bool));
 int SetVerdict(int verdict, __u32 daddr);
 void FlushQueue(void);
 

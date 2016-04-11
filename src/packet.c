@@ -43,14 +43,31 @@ static inline u_int8_t _decode_ip_protocol(u_int8_t superman_protocol)
 	return superman_protocol - SUPERMAN_MAX_TYPE;
 }
 
-/*
-struct net_device* lookup_dst(uint32_t addr)
+
+struct dst_entry* lookup_dst(struct net_device* dev, uint32_t saddr, uint32_t daddr)
 {
-	//struct rtable* r = ip_route_output(&init_net, addr, 0, 0);
-	struct net_device* dev = ip_dev_find(&init_net, addr);
-	
+	struct rtable* rt;
+	struct dst_entry* dst;
+	struct flowi4 fl;
+
+	flowi4_init_output(&fl, dev->ifindex, 0, 0, RT_SCOPE_UNIVERSE, 0, 0, daddr, saddr, 0, 0);
+ 	rt = ip_route_output_key(dev_net(dev), &fl);
+ 	if (IS_ERR(rt))
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - \tip_route_output_key error!\n");
+		return NULL;
+	}
+
+	dst = &rt->dst;
+	if(dst == NULL)
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - \tdst == NULL!\n");
+		return NULL;
+	}
+
+	return dst;
 }
-*/
+
 
 inline bool is_superman_packet(struct sk_buff* skb)
 {
@@ -70,32 +87,36 @@ unsigned int send_superman_packet(struct superman_packet_info* spi, bool result)
 
 	if(result)
 	{
-		struct flowi4 fl;
-		struct rtable* rt;
+		//struct flowi4 fl;
+		//struct rtable* rt;
 		struct dst_entry* dst;
 
 		printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - (%u) %s, %d bytes sending to %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 		ip_send_check(spi->iph);
 
-		flowi4_init_output(&fl, spi->skb->dev->ifindex, 0, 0, RT_SCOPE_UNIVERSE, 0, 0, spi->iph->daddr, spi->iph->saddr, 0, 0);
-		rt = ip_route_output_key(dev_net(spi->skb->dev), &fl);
-		if(IS_ERR(rt))
-		{
-			printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - Routing failed.\n");
-			printk(KERN_INFO "if: %d, src: %u.%u.%u.%u, dst: %u.%u.%u.%u\n", spi->skb->dev->ifindex, 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
-		}
-		else
+		//flowi4_init_output(&fl, spi->skb->dev->ifindex, 0, 0, RT_SCOPE_UNIVERSE, 0, 0, spi->iph->daddr, spi->iph->saddr, 0, 0);
+		//rt = ip_route_output_key(dev_net(spi->skb->dev), &fl);
+		//if(IS_ERR(rt))
+		//{
+		//	printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - Routing failed.\n");
+		//	printk(KERN_INFO "if: %d, src: %u.%u.%u.%u, dst: %u.%u.%u.%u\n", spi->skb->dev->ifindex, 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+		//}
+		//else
+
+		dst = lookup_dst(spi->skb->dev, spi->iph->saddr, spi->iph->daddr);
+		if(dst)
 		{
 			spi->skb->protocol = htons(ETH_P_IP);
-			skb_dst_set(spi->skb, &rt->dst);
-			dst = skb_dst(spi->skb);
+			skb_dst_set(spi->skb, dst);
 			spi->skb->dev = dst->dev;
 
 			// printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tSending...\n");
 			spi->result = NF_ACCEPT;
 			dst->output(NULL, spi->skb);
 		}
+		else
+			printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tFailed routing.\n");
 	}
 	else
 		printk(KERN_INFO "SUPERMAN: Packet (send_superman_packet) - \t\tFailed crypto.\n");
@@ -104,6 +125,7 @@ unsigned int send_superman_packet(struct superman_packet_info* spi, bool result)
 	return FreeSupermanPacketInfo(spi);
 }
 
+/*
 unsigned int hash_then_send_superman_packet(struct superman_packet_info* spi, bool result)
 {
 	if(result)
@@ -115,6 +137,7 @@ unsigned int hash_then_send_superman_packet(struct superman_packet_info* spi, bo
 
 	return FreeSupermanPacketInfo(spi);
 }
+*/
 
 bool EncapsulatePacket(struct superman_packet_info* spi)
 {
@@ -174,9 +197,9 @@ bool EncapsulatePacket(struct superman_packet_info* spi)
 		// Fill in the superman header
 		spi->shdr = (struct superman_header*)skb_transport_header(spi->skb);
 		spi->shdr->type = SUPERMAN_MAX_TYPE + spi->iph->protocol;					// We're preparing a superman packet.
-		spi->shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(spi->addr)));			// This will be a unique counter value for each packet, cycling round.
+		spi->shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(spi->e2e_addr)));			// This will be a unique counter value for each packet, cycling round.
 		spi->shdr->payload_len = htons(spi->skb->len - iph_len - SUPERMAN_HEADER_LEN);	// The payload length.	
-		spi->shdr->last_node = htonl(0);
+		spi->shdr->last_addr = htonl(0);
 
 		// Update the IP header
 		spi->iph->protocol = SUPERMAN_PROTOCOL_NUM;							// Our SUPERMAN protocol number
@@ -260,10 +283,10 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 
 	// Payload goes here.
 
-	//   2 bytes  |     sk_len
-	// -----------------------------
-	// |  sk len  |       sk       |
-	// -----------------------------
+	//   sk_len
+	// -----------
+	//     sk       
+	// -----------
 
 	payload = skb_put(tx_sk, sk_len);
 	memcpy(payload, sk, sk_len);
@@ -284,7 +307,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
 	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
-	iph->ttl = 64;									// A recommended value (in seconds)
+	iph->ttl = 1;									// Don't traverse more than one hop for this broadcast packet (ie, do not flood the network).
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
 	iph->check = 0;									// No checksum yet
 	iph->saddr = inet_select_addr(dev, htonl(INADDR_BROADCAST), RT_SCOPE_UNIVERSE);	// Grab the most appropriate address.
@@ -342,10 +365,10 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 
 	// Payload goes here.
 
-	//   2 bytes  |     sk_len
-	// -----------------------------
-	// |  sk len  |       sk       |
-	// -----------------------------
+	//   sk_len
+	// -----------
+	//     sk     
+	// -----------
 
 	payload = skb_put(tx_sk, sk_len);
 	memcpy(payload, sk, sk_len);
@@ -366,7 +389,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	iph->tot_len = htons(tx_sk->len);						// Total length of the packet
 	iph->frag_off = htons(IP_DF);							// Fragment Offset - this packet is not fragmented
 	iph->id = htons(0);								// The identifier is supposed to be a unique value during such that it does not repeat within the maximum datagram lifetime (MDL)
-	iph->ttl = 64;									// A recommended value (in seconds)
+	iph->ttl = 1;									// Do not let this packet be forwarded (routed) - if we can't talk direct, don't bother.
 	iph->protocol = SUPERMAN_PROTOCOL_NUM;						// Our SUPERMAN protocol number
 	iph->check = 0;									// No checksum yet
 	iph->saddr = inet_select_addr(dev, addr, RT_SCOPE_UNIVERSE);			// Grab the most appropriate address.
@@ -384,12 +407,13 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 {
 	struct security_table_entry* ste;
 	struct net_device *dev;
+	struct dst_entry* dst;		
 	struct in_addr;
 	struct sk_buff* tx_sk;
 	struct superman_header* shdr;
 	struct iphdr* iph;
 	void* payload;
-	struct superman_packet_info* spi;
+	//struct superman_packet_info* spi;
 
 	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Exchange to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
 
@@ -409,7 +433,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	}
 
 	// Allocate a new packet
-	tx_sk = alloc_skb(sizeof(struct iphdr) + SUPERMAN_HEADER_LEN + sizeof(__be16) + certificate_len, GFP_KERNEL);
+	tx_sk = alloc_skb(sizeof(struct iphdr) + SUPERMAN_HEADER_LEN + CERTIFICATE_EXCHANGE_PAYLOAD_LEN(certificate_len), GFP_KERNEL);
 	if(tx_sk == NULL)
 	{
 		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
@@ -424,21 +448,23 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 
 	// Payload goes here.
 
-	//   2 bytes  |    cert_len
-	// -----------------------------
-	// | Cert len |      Cert      |
-	// -----------------------------
-
-	payload = skb_put(tx_sk, certificate_len + sizeof(__be16));
-	*((__be16*)payload) = htons(certificate_len);
-	memcpy(payload + sizeof(__be16), certificate, certificate_len);
+	//     2 bytes      | certificate_len
+	// -----------------------------------
+	//  certificate_len |   certificate    
+	// -----------------------------------
+	payload = skb_put(tx_sk, CERTIFICATE_EXCHANGE_PAYLOAD_LEN(certificate_len));
+	{
+		struct certificate_exchange_payload* p = (struct certificate_exchange_payload*)payload;
+		p->certificate_len = htons(certificate_len);
+		memcpy(p->certificate, certificate, certificate_len);
+	}
 
 	// Setup the superman header
 	shdr = (struct superman_header*) skb_push(tx_sk, SUPERMAN_HEADER_LEN);
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_EXCHANGE_TYPE;				// We're preparing a certificate exchange packet.
 	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(addr)));		// This will be a unique counter value for each packet, cycling round.
-	shdr->payload_len = htons(certificate_len + sizeof(__be16));			// A certificate exchange contains a certificate.
+	shdr->payload_len = htons(CERTIFICATE_EXCHANGE_PAYLOAD_LEN(certificate_len));			// A certificate exchange contains a certificate.
 
 	// Setup the IP header
 	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -455,9 +481,27 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	iph->saddr = inet_select_addr(dev, addr, RT_SCOPE_UNIVERSE);			// Grab the most appropriate address.
 	iph->daddr = addr;								// Broadcast the message to all on the subnet
 
-	spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
-	//send_superman_packet(spi, true);
-	AddE2ESecurity(spi, hash_then_send_superman_packet);
+	tx_sk->protocol = htons(ETH_P_IP);
+	tx_sk->sk = NULL;
+	ip_send_check(iph);
+
+	dst = lookup_dst(dev, iph->saddr, iph->daddr);
+	if(dst)
+	{
+		skb_dst_set(tx_sk, dst);
+		tx_sk->dev = dst->dev;
+
+		if(ip_local_out(tx_sk) == NF_DROP)
+			kfree_skb(tx_sk);
+	}
+	else
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - Routing failed.\n");
+		kfree_skb(tx_sk);
+	}
+
+	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	// Dereference the device.
 	dev_put(dev);
@@ -468,12 +512,13 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 {
 	struct security_table_entry* ste;
 	struct net_device *dev;
+	struct dst_entry* dst;		
 	struct in_addr;
 	struct sk_buff* tx_sk;
 	struct superman_header* shdr;
 	struct iphdr* iph;
 	void* payload;
-	struct superman_packet_info* spi;
+	//struct superman_packet_info* spi;
 
 	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Certificate Exchange With Broadcast Key to %u.%u.%u.%u...\n", 0x0ff & addr, 0x0ff & (addr >> 8), 0x0ff & (addr >> 16), 0x0ff & (addr >> 24));
 	// printk(KERN_INFO "SUPERMAN: Packet - \tCertificate len: %u, Broadcast Key len: %u.\n", certificate_len, broadcast_key_len);
@@ -494,7 +539,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	}
 
 	// Allocate a new packet
-	tx_sk = alloc_skb(sizeof(struct iphdr) + SUPERMAN_HEADER_LEN + sizeof(__be16) + certificate_len + sizeof(__be16) + broadcast_key_len, GFP_KERNEL);
+	tx_sk = alloc_skb(sizeof(struct iphdr) + SUPERMAN_HEADER_LEN + CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_PAYLOAD_LEN(certificate_len, broadcast_key_len), GFP_KERNEL);
 	if(tx_sk == NULL)
 	{
 		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
@@ -509,23 +554,25 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 
 	// Payload goes here.
 
-	//   2 bytes  |    cert_len    | 2 bytes  | broadcast_key_len
-	// ------------------------------------------------------------
-	// | Cert len |      Cert      | bkey len |        bkey       |
-	// ------------------------------------------------------------
-
-	payload = skb_put(tx_sk, certificate_len + sizeof(__be16) + broadcast_key_len + sizeof(__be16));
-	*((__be16*)payload) = htons(certificate_len);
-	memcpy(payload + sizeof(__be16), certificate, certificate_len);
-	*((__be16*)(payload + sizeof(__be16) + certificate_len)) = htons(broadcast_key_len);
-	memcpy(payload + sizeof(__be16) + certificate_len + sizeof(__be16), broadcast_key, broadcast_key_len);
-
+	//      2 bytes     |     2 bytes       |  certificate_len     | broadcast_key_len
+	// --------------------------------------------------------------------------------
+	//   certificte_len | broadcast_key_len |    certificate       |   broadcast_key       
+	// --------------------------------------------------------------------------------
+	payload = skb_put(tx_sk, CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_PAYLOAD_LEN(certificate_len, broadcast_key_len));
+	{
+		struct certificate_exchange_with_broadcast_key_payload* p = (struct certificate_exchange_with_broadcast_key_payload*)payload;
+		p->certificate_len = htons(certificate_len);
+		p->broadcast_key_len = htons(broadcast_key_len);
+		memcpy(p->data, certificate, certificate_len);
+		memcpy(p->data + certificate_len, broadcast_key, broadcast_key_len);
+	}
+	
 	// Setup the superman header
 	shdr = (struct superman_header*) skb_push(tx_sk, SUPERMAN_HEADER_LEN);
 	skb_reset_transport_header(tx_sk);
 	shdr->type = SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE;		// We're preparing a certificate exchange with broadcast key packet.
 	shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(addr)));		// This will be a unique counter value for each packet, cycling round.
-	shdr->payload_len = htons(certificate_len + sizeof(__be16) + broadcast_key_len + sizeof(__be16));	// A certificate exchange with broadcast key contains a certificate and broadcast key.
+	shdr->payload_len = htons(CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_PAYLOAD_LEN(certificate_len, broadcast_key_len));	// A certificate exchange with broadcast key contains a certificate and broadcast key.
 
 	// Setup the IP header
 	iph = (struct iphdr*) skb_push(tx_sk, sizeof(struct iphdr));
@@ -542,8 +589,27 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	iph->saddr = inet_select_addr(dev, addr, RT_SCOPE_UNIVERSE);			// Grab the most appropriate address.
 	iph->daddr = addr;								// Broadcast the message to all on the subnet
 
-	spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
-	AddE2ESecurity(spi, hash_then_send_superman_packet);
+	tx_sk->protocol = htons(ETH_P_IP);
+	tx_sk->sk = NULL;
+	ip_send_check(iph);
+
+	dst = lookup_dst(dev, iph->saddr, iph->daddr);
+	if(dst)
+	{
+		skb_dst_set(tx_sk, dst);
+		tx_sk->dev = dst->dev;
+
+		if(ip_local_out(tx_sk) == NF_DROP)
+			kfree_skb(tx_sk);
+	}
+	else
+	{
+		printk(KERN_INFO "SUPERMAN: Packet - Routing failed.\n");
+		kfree_skb(tx_sk);
+	}
+
+	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	// Dereference the device.
 	dev_put(dev);
@@ -651,31 +717,9 @@ void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr,
 	tx_sk->protocol = htons(ETH_P_IP);
 	tx_sk->sk = NULL;
 	ip_send_check(iph);
-	ip_local_out(tx_sk);
 
-/*
-	printk(KERN_INFO "SUPERMAN: Packet - \tDumping stack before nf_hook.\n");
-	dump_stack();	
-
-	{
-		int nfresult = NF_REPEAT;
-		while(nfresult == NF_REPEAT)
-			nfresult = nf_hook(NFPROTO_IPV4, NF_INET_LOCAL_OUT, NULL, tx_sk, NULL, dst->dev, dst_output_sk);
-
-		printk(KERN_INFO "SUPERMAN: Packet - \tDumping stack after nf_hook, result: %d.\n", nfresult);
-		dump_stack();	
-
-		if(nfresult == NF_ACCEPT)
-			dst->output(NULL, tx_sk);
-		else
-		{
-			printk(KERN_INFO "SUPERMAN: Packet - \tnf_hook result: %d.\n", nfresult);
-			if(nfresult == NF_DROP)
-				kfree_skb(tx_sk);
-			return;
-		}
-	}
-*/
+	if(ip_local_out(tx_sk) == NF_DROP)
+		kfree_skb(tx_sk);	
 
 	printk(KERN_INFO "SUPERMAN: Packet - \tSK Response sent.\n");
 }
@@ -777,7 +821,9 @@ void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr)
 	tx_sk->protocol = htons(ETH_P_IP);
 	tx_sk->sk = NULL;
 	ip_send_check(iph);
-	ip_local_out(tx_sk);
+
+	if(ip_local_out(tx_sk) == NF_DROP)
+		kfree_skb(tx_sk);	
 
 	printk(KERN_INFO "SUPERMAN: Packet - \t SK Request sent.\n");
 }
@@ -793,7 +839,7 @@ void SendInvalidateSKPacket(uint32_t addr)
 	struct superman_header* shdr;
 	struct iphdr* iph;
 	void* payload;
-	struct superman_packet_info* spi;
+	//struct superman_packet_info* spi;
 
 	// printk(KERN_INFO "SUPERMAN: Packet - \tSend SK Invalidate...\n");
 
@@ -818,7 +864,7 @@ void SendInvalidateSKPacket(uint32_t addr)
 	// ----------------
 
 	payload = skb_put(tx_sk, sizeof(addr));
-	*((__be32*)payload) = htonl(addr);
+	*((__be32*)payload) = addr;
 
 	// Setup the superman header
 	shdr = (struct superman_header*) skb_push(tx_sk, SUPERMAN_HEADER_LEN);
@@ -842,8 +888,15 @@ void SendInvalidateSKPacket(uint32_t addr)
 	iph->saddr = inet_select_addr(dev, htonl(INADDR_BROADCAST), RT_SCOPE_UNIVERSE);	// Grab the most appropriate address.
 	iph->daddr = htonl(INADDR_BROADCAST);						// Broadcast the message to all on the subnet
 
-	spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
-	AddE2ESecurity(spi, hash_then_send_superman_packet);
+	tx_sk->protocol = htons(ETH_P_IP);
+	tx_sk->sk = NULL;
+	ip_send_check(iph);
+
+	if(ip_local_out(tx_sk) == NF_DROP)
+		kfree_skb(tx_sk);	
+
+	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	INTERFACE_ITERATOR_END
 	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send SK Invalidate done.\n");
@@ -861,7 +914,7 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	struct superman_header* shdr;
 	struct iphdr* iph;
 	void* payload;
-	struct superman_packet_info* spi;
+	//struct superman_packet_info* spi;
 
 	// printk(KERN_INFO "SUPERMAN: Packet - \tSend SK Invalidate...\n");
 
@@ -911,8 +964,15 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	iph->saddr = inet_select_addr(dev, htonl(INADDR_BROADCAST), RT_SCOPE_UNIVERSE);	// Grab the most appropriate address.
 	iph->daddr = htonl(INADDR_BROADCAST);						// Broadcast the message to all on the subnet
 
-	spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
-	AddE2ESecurity(spi, hash_then_send_superman_packet);
+	tx_sk->protocol = htons(ETH_P_IP);
+	tx_sk->sk = NULL;
+	ip_send_check(iph);
+
+	if(ip_local_out(tx_sk) == NF_DROP)
+		kfree_skb(tx_sk);	
+
+	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	INTERFACE_ITERATOR_END
 	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send Broadcast Key Exchange done.\n");
