@@ -18,7 +18,7 @@ if [[ ! -d ./initrd-prereqs ]]; then
 	opensslInstallInto ./initrd-prereqs
 fi
 
-aptInstall "libnl-3-dev libnl-genl-3-dev"
+aptInstall "libnl-3-dev libnl-genl-3-dev pigz"
 
 echob Building the SUPERMAN kernel module...
 cd ../kernel-module

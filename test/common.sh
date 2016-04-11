@@ -91,7 +91,7 @@ initrdExtract()
 	[ -d ${TARGET_PATH} ] || mkdir -p ${TARGET_PATH}
 
 	pushd ${TARGET_PATH} >/dev/null
-	gunzip --stdout ${FULL_SOURCE_IMG} | cpio -id --quiet
+	pigz -dc ${FULL_SOURCE_IMG} | cpio -id --quiet
 	popd >/dev/null
 }
 
@@ -104,7 +104,7 @@ initrdCreate()
 	if [ -d ${SOURCE_PATH} ]; then
 
 		pushd ${SOURCE_PATH} >/dev/null
-		find . | cpio --quiet -H newc -o | gzip > ${FULL_TARGET_IMG}
+		find . | cpio --quiet -H newc -o | pigz > ${FULL_TARGET_IMG}
 		popd >/dev/null
 	fi
 }
