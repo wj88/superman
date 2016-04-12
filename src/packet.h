@@ -102,6 +102,11 @@ struct broadcast_key_exchange_payload {
 };
 #define BROADCAST_KEY_EXCHANGE_PAYLOAD_LEN(broadcast_key_len) (sizeof(struct broadcast_key_exchange_payload) + broadcast_key_len)
 
+struct sk_invalidate_payload {
+	__be32		addr;
+};
+#define SK_INVALIDATE_PAYLOAD_LEN sizeof(struct sk_invalidate_payload)
+
 #pragma pack(pop)
 
 inline bool if_info_from_net_device(__be32* addr, __be32* baddr, const struct net_device *dev);
@@ -120,7 +125,7 @@ void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr);
 void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr, uint32_t sk_len, unsigned char* sk);
 
 void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key);
-void SendInvalidateSKPacket(uint32_t addr);
+void SendSKInvalidatePacket(uint32_t addr);
 
 /*
 void SendCertificateRequest(struct sk_buff* rx_sk);

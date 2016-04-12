@@ -252,8 +252,8 @@ unsigned int process_certificate_exchange_with_broadcast_key_packet(struct super
 		certificate_len = ntohs(p->certificate_len);
 		broadcast_key_len = ntohs(p->broadcast_key_len);
 
-		printk(KERN_INFO "SUPERMAN: Netfilter - \t\tCertificate length: %u\n", certificate_len);
-		printk(KERN_INFO "SUPERMAN: Netfilter - \t\tBroadcast Key length: %u\n", broadcast_key_len);
+		// printk(KERN_INFO "SUPERMAN: Netfilter - \t\tCertificate length: %u\n", certificate_len);
+		// printk(KERN_INFO "SUPERMAN: Netfilter - \t\tBroadcast Key length: %u\n", broadcast_key_len);
 
 		certificate = p->data;
 		broadcast_key = (p->data + certificate_len);
@@ -269,7 +269,7 @@ unsigned int process_certificate_exchange_with_broadcast_key_packet(struct super
 	if(spi->result != NF_STOLEN) spi->result = NF_DROP;
 
 	// Cleanup the SPI!
-	printk(KERN_INFO "SUPERMAN: Netfilter - \t\tFinished processing the certificate exchange with broadcast key, result: %d.\n", spi->result);
+	// printk(KERN_INFO "SUPERMAN: Netfilter - \t\tFinished processing the certificate exchange with broadcast key, result: %d.\n", spi->result);
 	return FreeSupermanPacketInfo(spi);
 }
 
@@ -301,7 +301,24 @@ unsigned int process_broadcast_key_exchange_packet(struct superman_packet_info* 
 	if(spi->result != NF_STOLEN) spi->result = NF_DROP;
 
 	// Cleanup the SPI!
-	printk(KERN_INFO "SUPERMAN: Netfilter - \t\tFinished processing the broadcast key exchange, result: %d.\n", spi->result);
+	// printk(KERN_INFO "SUPERMAN: Netfilter - \t\tFinished processing the broadcast key exchange, result: %d.\n", spi->result);
+	return FreeSupermanPacketInfo(spi);
+}
+
+
+unsigned int process_sk_invalidate_packet(struct superman_packet_info* spi)
+{
+	// NOTE: We need to free our spi.
+	struct sk_invalidate_payload* payload;
+	__be32 addr;
+
+	//printk(KERN_INFO "SUPERMAN: Netfilter - \t\tProcessing the invalidate sk...\n");
+	payload = (struct sk_invalidate_payload*)spi->payload;
+	addr = payload->addr;
+
+	ReceivedSupermanSKInvalidate(addr);
+
+	spi->result = NF_DROP;				// Don't let an Invalidate SK propogate higher up the stack
 	return FreeSupermanPacketInfo(spi);
 }
 
@@ -442,16 +459,19 @@ unsigned int hook_localin_remove_e2e(struct superman_packet_info* spi, bool resu
 		switch(spi->shdr->type)
 		{
 			case SUPERMAN_CERTIFICATE_EXCHANGE_TYPE:				// It's a Certificate Exchange
-				printk(KERN_INFO "SUPERMAN: Netfilter (hook_localin_remove_e2e) calling process_certificate_exchange...\n");
+				// printk(KERN_INFO "SUPERMAN: Netfilter (hook_localin_remove_e2e) calling process_certificate_exchange...\n");
 				return process_certificate_exchange_packet(spi);
 				break;
 
 			case SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE:		// It's a Certificate Exchange With Broadcast Key
-				printk(KERN_INFO "SUPERMAN: Netfilter (hook_localin_remove_e2e) calling process_certificate_exchange_with_broadcast_key_packet...\n");
+				// printk(KERN_INFO "SUPERMAN: Netfilter (hook_localin_remove_e2e) calling process_certificate_exchange_with_broadcast_key_packet...\n");
 				return process_certificate_exchange_with_broadcast_key_packet(spi);
 				break;
 			case SUPERMAN_BROADCAST_KEY_EXCHANGE_TYPE:					// It's a Broadcast Key Exchange
 				return process_broadcast_key_exchange_packet(spi);
+				break;
+			case SUPERMAN_SK_INVALIDATE_TYPE:					// It's an Invalidate SK
+				return process_sk_invalidate_packet(spi);
 				break;
 		}
 
@@ -522,7 +542,7 @@ unsigned int hook_localout_post_sk_response(struct superman_packet_info* spi, bo
 unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
-	printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING)\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
 	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(state->in->ifindex))
@@ -543,7 +563,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 	// Deal with special case unencapsulated SUPERMAN packets which are not secured!
 	if(spi->shdr)
 	{
-		printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - (%u) %s, %d bytes recieved from %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24));
+		// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - (%u) %s, %d bytes recieved from %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24));
 
 		// Perform a basic sanity check on the packet.
 		if(ntohs(spi->shdr->payload_len) > spi->iph->tot_len - (skb_network_header_len(skb) + sizeof(struct superman_header)))
@@ -605,7 +625,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 		
 		// For all other packet types, they must pass the hmac check!
 		// NOTE: The callback becomes responsible for clearing up the SPI.
-		printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tRemoving P2P security...\n");
+		// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \t\tRemoving P2P security...\n");
 		return RemoveP2PSecurity(spi, &hook_prerouting_removed_p2p);
 	}
 
@@ -618,7 +638,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
-	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN)\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
 	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(state->in->ifindex))
@@ -632,7 +652,7 @@ unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 	// Deal with special case unencapsulated SUPERMAN packets which are not secured!
 	if(spi->shdr)
 	{
-		printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - (%u) %s, %d bytes recieved from %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24));
+		// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - (%u) %s, %d bytes recieved from %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24));
 
 		// If we don't need to apply E2E, let it through now.
 		if(!spi->e2e_secure_packet)
@@ -691,7 +711,7 @@ unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
-	printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT)\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
 	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(state->out->ifindex))
@@ -710,7 +730,7 @@ unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, c
 
 	if(spi->shdr)
 	{
-		printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - (%u) %s, %d bytes sending to %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+		// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - (%u) %s, %d bytes sending to %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 		// If we don't need to apply E2E, let it through now.
 		if(!spi->e2e_secure_packet)
@@ -743,7 +763,7 @@ unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, c
 			}
 		}
 
-		printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - \t\tAdding E2E security.\n");
+		//printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - \t\tAdding E2E security.\n");
 		return AddE2ESecurity(spi, &hook_localout_add_e2e);
 	}
 
@@ -756,7 +776,7 @@ unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, c
 unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
-	printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING)\n");
+	// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING)\n");
 
 	// Let non-IP packets and those of interfaces we're not monitoring.
 	if(!is_valid_ip_packet(skb) || !HasInterfacesTableEntry(state->out->ifindex))
@@ -768,7 +788,7 @@ unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb
 	// Deal with special case SUPERMAN packets which we leave alone (after all, we made them)!
 	if(spi->shdr)
 	{
-		printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - (%u) %s, %d bytes sending to %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+		// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - (%u) %s, %d bytes sending to %u.%u.%u.%u.\n", spi->shdr->type, lookup_superman_packet_type_desc(spi->shdr->type), spi->skb->len, 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
 		switch(spi->shdr->type)
 		{
@@ -782,24 +802,26 @@ unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb
 				spi->result = NF_ACCEPT;
 				return FreeSupermanPacketInfo(spi);
 				break;
+/*
 			case SUPERMAN_CERTIFICATE_EXCHANGE_TYPE:		// It's a Certificate Exchange
 				// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tCertificate Exchange Packet.\n");
 				//spi->result = NF_ACCEPT;
 				//return FreeSupermanPacketInfo(spi);
-				printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - Seen a Certificate Exchange, letting through.\n");
+				// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - Seen a Certificate Exchange, letting through.\n");
 				break;
 			case SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_TYPE:		// It's a Certificate Exchange With Broadcast Key
 				// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tCertificate Exchange With Broadcast Key Packet.\n");
 				//spi->result = NF_ACCEPT;
 				//return FreeSupermanPacketInfo(spi);
-				printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - Seen a Certificate Exchange with Broadcast Key, letting through.\n");
+				// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - Seen a Certificate Exchange with Broadcast Key, letting through.\n");
 				break;
 			case SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE:
-				printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - Seen an SK Request, letting through.\n");
+				// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - Seen an SK Request, letting through.\n");
 				break;
 			case SUPERMAN_AUTHENTICATED_SK_RESPONSE_TYPE:
-				printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - Seen an SK Response, letting through.\n");
+				//printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - Seen an SK Response, letting through.\n");
 				break;
+*/
 		}
 
 		// Are we not supposed to do P2P on this packet
@@ -833,7 +855,7 @@ unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb
 			}
 		}
 
-		printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tAdding P2P security.\n");
+		//printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING) - \t\tAdding P2P security.\n");
 		return AddP2PSecurity(spi, &hook_postrouting_add_p2p);
 	}
 

@@ -296,7 +296,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	struct scatterlist *sg;
 	struct aead_request *req;
 
-	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Adding E2E security...\n");
+	//printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Adding E2E security using %s key...\n", (spi->e2e_use_broadcast_key ? "broadcast" : "destinations"));
 
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Packet length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Packet contents:\n");
@@ -540,7 +540,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 //	-----------------------------------------------------------------
 
 
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Removing E2E security...\n");
+	//printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Removing E2E security using %s key...\n", (spi->e2e_use_broadcast_key ? "broadcast" : "destinations"));
 
 	// If we don't need to secure this packet, accept it.
 	if(!spi->e2e_secure_packet)
@@ -723,7 +723,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	struct ahash_request *req;
 	struct sk_buff* trailer;
 
-	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Adding P2P security...\n");
+	//printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Adding P2P security using %s key...\n", (spi->p2p_use_broadcast_key ? "broadcast" : "link"));
 
 	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Packet length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Packet contents:\n");
@@ -904,7 +904,7 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 	struct ahash_request *req;
 	struct sk_buff* trailer;
 
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - \tRemoving P2P security...\n");
+	//printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - Removing P2P security using %s key...\n", (spi->p2p_use_broadcast_key ? "broadcast" : "link"));
 
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - Packet length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - Packet contents:\n");

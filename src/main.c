@@ -190,7 +190,7 @@ void InvokeSendDiscoveryRequest()
 	unsigned char* sk;
 	if(MallocAndCopyPublickey(&sk_len, &sk))
 	{
-		printf("Main: Calling SendSupermanDiscoveryRequest...\n");
+		//printf("Main: Calling SendSupermanDiscoveryRequest...\n");
 		SendSupermanDiscoveryRequest(sk_len, sk);
 
 		free(sk);
@@ -250,13 +250,13 @@ int main(int argc, char **argv)
 {
 	ProcessArgs(argc, argv);
 
-	printf("Main: Initialising netlink...\n");
+	//printf("Main: Initialising netlink...\n");
 	if(!InitNetlink())
 	{
 		exit(EXIT_FAILURE);
 	}
 
-	printf("Main: Initialising security...\n");
+	//printf("Main: Initialising security...\n");
 	if(!InitSecurity(ca_cert_filename, node_cert_filename, node_dh_privatekey_filename))
 	{
 		DeInitNetlink();

@@ -138,6 +138,12 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	{
 		switch(spi->shdr->type)
 		{
+			// The only insecured packets types allowed when SUPERMAN is enabled.
+			case SUPERMAN_DISCOVERY_REQUEST_TYPE:
+			case SUPERMAN_CERTIFICATE_REQUEST_TYPE:
+				spi->e2e_secure_packet = false;
+				spi->p2p_secure_packet = true;
+				break;
 			// For certain packet types, we use the broadcast key for e2e (although not for p2p)
 			case SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE:
 			case SUPERMAN_AUTHENTICATED_SK_RESPONSE_TYPE:
@@ -217,7 +223,7 @@ unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi)
 {
 	unsigned int nf_result = spi->result;
 	superman_packet_info_count--;
-	printk(KERN_INFO "SUPERMAN: packet_info: \tFreeing superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, spi->id);
+	//printk(KERN_INFO "SUPERMAN: packet_info: \tFreeing superman_packet_info (%u current allocated, id: %u)...\n", superman_packet_info_count, spi->id);
 
 	if(spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)
 	{
