@@ -3,7 +3,7 @@
 
 ## What is this reposoritory for? ##
 
-To provide some background context, it would be best to refer to [this research paper](http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=7412128&tag=1).
+To provide some background context, it would be best to refer to [this research paper](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7412128).
 
 In summary:
 
@@ -50,7 +50,6 @@ In addition, the kernel module provides packet generation for the specialist SUP
 When loaded, the kernel module provides a number of proc filesystem entries.
 
 ```
-#!shell
 
 cat /proc/superman/version          # Display the SUPERMAN kernel version
 cat /proc/superman/security_table   # Summary of the data stored in the security table
@@ -71,7 +70,6 @@ Ideally, the daemon would be brought up at boot time, although for the purpose o
 The daemon can take several arguments although eventually most of the importants will be provided through configuration files:
 
 ````
-#!shell
 
 Usage: superman
 
@@ -98,7 +96,6 @@ The following guide has been tested and works with (although may not be limited 
 Clone the repository and change into the test directory:
 
 ```
-#!shell
 
 git clone git@bitbucket.org:wj88/superman.git
 cd superman/test
@@ -107,7 +104,6 @@ cd superman/test
 The source tree makes using of Makefiles to support the build process. There are a number of options which can be used but we're going to focus on the building the test environment and running a simulation. To make life easier, you can get up and running with a single command.
 
 ```
-#!shell
 
 make sim
 ```
@@ -136,7 +132,6 @@ Layer 3 IP network communication between each qemu instance is secured using SUP
 To try it you can run the following from node 3:
 
 ```
-#!shell
 
 ping -c 5 10.0.0.2
 ```
