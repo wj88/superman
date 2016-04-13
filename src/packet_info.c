@@ -171,37 +171,54 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	}
 
 	// If we're dealing with PRE_ROUTING OR POST_ROUTING we'll be needing the P2P security details. 
-	if(spi->ops != NULL && (spi->ops->hooknum == NF_INET_POST_ROUTING || spi->ops->hooknum == NF_INET_PRE_ROUTING))
+	if(spi->shdr != NULL && spi->ops != NULL && (spi->ops->hooknum == NF_INET_POST_ROUTING || spi->ops->hooknum == NF_INET_PRE_ROUTING))
 	{
+		spi->p2p_our_addr = htonl(0);
+		spi->p2p_neighbour_addr = htonl(0);
+
 		// Lookup the next hop and grab the security credentials
 		if(spi->p2p_use_broadcast_key)
 		{
-			spi->p2p_our_addr = htonl(0);
-			spi->p2p_neighbour_addr = htonl(0);
 			spi->p2p_has_security_details = GetSecurityTableEntry(INADDR_BROADCAST, &(spi->p2p_security_details));
 		}
 		else
 		{
-			struct rtable* rt;
-			struct flowi4 fl4;
-			memset(&fl4, 0, sizeof(fl4));
-			fl4.daddr = spi->e2e_addr;
-			fl4.flowi4_flags = 0x08;
-		 	rt = ip_route_output_key(&init_net, &fl4);
-		 	if (IS_ERR(rt))
+			// If the packet is on it's way out...
+			if(spi->ops->hooknum == NF_INET_POST_ROUTING)
 			{
-				printk(KERN_INFO "SUPERMAN: Netfilter - \tip_route_output_key error!\n");
-				spi->p2p_has_security_details = false;
+				// We need the next hops IP address and security credentials.
+				struct rtable* rt;
+				struct flowi4 fl4;
+				memset(&fl4, 0, sizeof(fl4));
+				fl4.daddr = spi->e2e_addr;
+				fl4.flowi4_flags = 0x08;
+			 	rt = ip_route_output_key(&init_net, &fl4);
+			 	if (IS_ERR(rt))
+				{
+					printk(KERN_INFO "SUPERMAN: Netfilter - \tip_route_output_key error!\n");
+					spi->p2p_has_security_details = false;
+				}
+
+				// Do we have a gateway?
+				if (rt->rt_gateway)
+					spi->p2p_neighbour_addr = rt->rt_gateway;
+				else
+					spi->p2p_neighbour_addr = spi->e2e_addr;
+
+				spi->p2p_our_addr = inet_select_addr(rt->dst.dev, spi->p2p_neighbour_addr, RT_SCOPE_UNIVERSE);
 			}
 
-			// Do we have a gateway?
-			if (rt->rt_gateway)
-				spi->p2p_neighbour_addr = rt->rt_gateway;
-			else
-				spi->p2p_neighbour_addr = spi->e2e_addr;
+			// If the packet is on it's way in...
+			if(spi->ops->hooknum == NF_INET_PRE_ROUTING)
+			{
+				// We need the the last hops IP address and security credentials.
+				spi->p2p_neighbour_addr = spi->shdr->last_addr;
+				spi->p2p_our_addr = spi->ifaddr;
+			}
 
-			spi->p2p_our_addr = inet_select_addr(rt->dst.dev, spi->p2p_neighbour_addr, RT_SCOPE_UNIVERSE);
 			spi->p2p_has_security_details = GetSecurityTableEntry(spi->p2p_neighbour_addr, &(spi->p2p_security_details));
+
+			// printk(KERN_INFO "SUPERMAN: Packet (packet_info) - when: %s, p2p_neighbour: %u.%u.%u.%u, p2p_our_addr: %u.%u.%u.%u, p2p_has_security_details: %s.\n", (spi->ops->hooknum == NF_INET_POST_ROUTING ? "outgoing" : "incoming"), 0x0ff & spi->p2p_neighbour_addr, 0x0ff & (spi->p2p_neighbour_addr >> 8), 0x0ff & (spi->p2p_neighbour_addr >> 16), 0x0ff & (spi->p2p_neighbour_addr >> 24), 0x0ff & spi->p2p_our_addr, 0x0ff & (spi->p2p_our_addr >> 8), 0x0ff & (spi->p2p_our_addr >> 16), 0x0ff & (spi->p2p_our_addr >> 24), (spi->p2p_has_security_details ? "true" : "false"));
 		}
 	}
 

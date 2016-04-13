@@ -542,6 +542,8 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 
 	//printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Removing E2E security using %s key...\n", (spi->e2e_use_broadcast_key ? "broadcast" : "destinations"));
 
+	spi->shdr->last_addr = 0;
+
 	// If we don't need to secure this packet, accept it.
 	if(!spi->e2e_secure_packet)
 	{
@@ -745,6 +747,9 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 		return NF_DROP;
 	}
 
+	// Add the our address to the header.
+	spi->shdr->last_addr = spi->p2p_our_addr;
+
 	// We have a key to use, load it into the crypto process.
 	// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Setting hash key...\n");
 	if(crypto_ahash_setkey(ahash, spi->p2p_security_details->skp, spi->p2p_security_details->skp_len) < 0)
@@ -863,6 +868,9 @@ unsigned int RemoveP2PSecurityDone(struct superman_packet_info* spi, unsigned in
 		// Trim the hmac off the end.
 		pskb_trim(spi->skb, spi->skb->len - HMAC_LEN);
 		spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) - HMAC_LEN);
+
+		// Remove the last_addr
+		spi->shdr->last_addr = 0;
 
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - Packet length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - Packet contents:\n");
