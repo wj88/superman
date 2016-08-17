@@ -45,7 +45,7 @@ debDownload()
 		pushd ${TARGET_PATH} >/dev/null
 	fi
 	for PACKAGE in $PACKAGES; do
-		aptUpdate
+		#aptUpdate
 		echob Downloading package ${PACKAGE}...
 		apt-get download ${PACKAGE}
 	done

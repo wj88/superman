@@ -1,21 +1,43 @@
-#!/bin/sh
+#!/bin/bash
 
-supermanid=$1
+echo Starting SUPERMAN configure_node...
 
-echo Configuring network settings...
-#sleep 2
+echo Determining node identifier...
+
+KERNEL_ARGS=$(cat /proc/cmdline)
+supermanid=$(for x in ${KERNEL_ARGS}; do [[ $x = supermanid=* ]] || continue; echo ${x#supermanid=}; done)
+echo "supermanid=${supermanid}" >> /etc/environment
+export supermanid=${supermanid}
+
+echo ... node is superman-${supermanid}
+
+echo Configuring the hostname...
 
 # Configure the hostname
 echo superman-${supermanid} >/etc/hostname
 /bin/hostname -F /etc/hostname
 
+echo Configuring network settings...
+
+if cat /sys/class/net/eth0/operstate | grep "up" > /dev/null; then
+	ifdown eth0
+fi
+
 # Bring up the network
-ip addr add 127.0.0.1/24 broadcast 127.0.0.255 dev lo label lo
-ip addr add 10.0.0.${supermanid}/24 broadcast 10.0.0.255 dev eth0 label eth0
-ip link set dev eth0 mtu 2500
-ip link set lo up
-ip link set eth0 up
-ifconfig eth0 promisc
+cat >> /etc/network/interfaces << EOF
+
+auto eth0
+iface eth0 inet static
+address 10.0.0.${supermanid}
+netmask 255.255.255.0
+gateway 10.0.0.254
+mtu 2500
+EOF
+
+#ifconfig eth0 promisc
+
+# Bring up the network
+ifup eth0
 
 # Bring up the network
 while ! cat /sys/class/net/eth0/operstate | grep "up" > /dev/null; do

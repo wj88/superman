@@ -3,8 +3,8 @@
 . ./common.sh
 
 echob Starting simulation...
-echo "	Sudo is required."
-sudo echo "		Sudo rights gained."
+echo "	Requesting sudo permission..."
+sudo echo "	... sudo permission granted."
 
 ./run.sh 2 &
 sleep 5

@@ -15,7 +15,7 @@ daemon:
 
 test: kernel-module daemon
 	@$(call echob,"Making the test environmet...")
-	@{ ./initrd_make.sh; }
+	@{ ./image_make.sh; }
 
 sim: test
 	@{ ./sim.sh; }
@@ -32,7 +32,7 @@ clean-kernel-module:
 
 clean:
 	@$(call echob,"Cleaning the test environment...")
-	@{ ./initrd_make.sh clean; }
+	@{ ./image_make.sh clean; }
 
 clean-all: clean-daemon clean-kernel-module clean
 
