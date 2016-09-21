@@ -24,4 +24,4 @@ prereqInstall()
 	rm -R ${TARGET_PATH}/boot ${TARGET_PATH}/usr/share/doc pkgs
 }
 
-[ "$0" = "$BASH_SOURCE" ] && prereqInstall ./initrd-prereqs
+[ "$0" = "$BASH_SOURCE" ] && prereqInstall ./rootfs-prereqs
