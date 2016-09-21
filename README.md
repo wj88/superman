@@ -89,8 +89,8 @@ You can try out SUPERMAN in a emulated test environment.
 
 The following guide has been tested and works with (although may not be limited to) the following:
 
-* Ubuntu x64 14.04 and 15.04 - desktop prefered although tested with server using SSH X tunnelling (ssh -X).
-* Kernel version 4.2.
+* Ubuntu x64 16.04 - desktop prefered although tested with server using SSH X tunnelling (ssh -X).
+* Kernel version 4.4.
 * Running as a regular user who has sudo permissions.
 
 Clone the repository and change into the test directory:
@@ -114,17 +114,16 @@ This command will:
 * ensure the prerequists are installed
 * compile the kernel-module
 * compile the daemon
-* clone and compile the correct version of OpenSSL
-* build a custom initial ramdisk image based, modified from the current systems kernel, including
-    * extracts the current systems initrd
+* build a custom root filesystem, based on the current ubuntu system, including
+    * deboostraps a new root filesystem
     * downloads prerequiste apt packages required and extracts them
     * incorperates the kernel-module and daemon
     * incorperates supporting scripts
-    * rebuilds the initrd
+    * builds an image of the filesystem
 * runs the test, including
     * sets up a network bridge interface for the nodes to talk over
     * configures a tap for each node
-    * execute a qemu instance for each node, using the current systems kernel and custom initrd
+    * execute a qemu instance for each node, using the current systems kernel and custom root filesystem, in non-persistant mode (filesystem changes will be lost)
     * saves pcap files for each node under /tmp
 
 Layer 3 IP network communication between each qemu instance is secured using SUPERMAN.
@@ -136,7 +135,16 @@ To try it you can run the following from node 3:
 ping -c 5 10.0.0.2
 ```
 
-The ping will send packets from node 3 and return to node 2. The actual data communicated is secured. You can take a look at the pcap files to verify.
+The ping will send packets from node 3 and return to node 2. The actual data communicated is secured.
+
+To verify the communication between nodes was in fact secured, the pcap files for each node are captured and stored under /tmp. To take a look at the contents of these files, it is recommended that you use the provided wireshark dissector which can interpret the contents of SUPERMAN packets. To do this, from the host computer (not a qemu instance):
+
+````
+
+./run-wireshark
+````
+
+
   
 ## Licence ##
 

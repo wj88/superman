@@ -23,7 +23,7 @@ uint16_t GetNextTimestampFromSupermanPacketInfo(struct superman_packet_info* spi
 }
 */
 
-struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
+struct superman_packet_info* MallocSupermanPacketInfo(struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	++superman_packet_info_count;
@@ -38,7 +38,6 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	}
 
 	// Information provided by the hook function where the SPI originated.
-	spi->ops = ops;
 	spi->skb = skb;
 	spi->state = state;
 
@@ -69,13 +68,13 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	// Address information about the origin/destination of this packet.
 	memset(&spi->ifaddr, 0, sizeof(struct in_addr));
 	memset(&spi->bcaddr, 0, sizeof(struct in_addr));
-	if(spi->ops != NULL && (spi->ops->hooknum == NF_INET_PRE_ROUTING || spi->ops->hooknum == NF_INET_LOCAL_IN))
+	if(spi->state != NULL && (spi->state->hook == NF_INET_PRE_ROUTING || spi->state->hook == NF_INET_LOCAL_IN))
 	{
 		if(spi->state->in != NULL)
 			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->state->in);
 		spi->e2e_addr = spi->iph->saddr;
 	}
-	else if(spi->ops != NULL && (spi->ops->hooknum == NF_INET_POST_ROUTING || spi->ops->hooknum == NF_INET_LOCAL_OUT || spi->ops->hooknum == NF_INET_FORWARD))
+	else if(spi->state != NULL && (spi->state->hook == NF_INET_POST_ROUTING || spi->state->hook == NF_INET_LOCAL_OUT || spi->state->hook == NF_INET_FORWARD))
 	{
 		if(spi->state->out != NULL)
 			if_info_from_net_device(&spi->ifaddr, &spi->bcaddr, spi->state->out);
@@ -84,7 +83,17 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	// If all else fails, we probably generated this packet ourselves.
 	else
 	{
-		spi->e2e_addr = spi->iph->daddr;
+		spi->e2e_addr = htonl(0);
+
+		if(spi->state == NULL)
+			printk(KERN_INFO "SUPERMAN: packet_info - \tspi->state == NULL");
+		else
+		{
+			printk(KERN_INFO "SUPERMAN: packet_info - \tspi->state->hooknum == %u", spi->state->hook);
+			printk(KERN_INFO "SUPERMAN: packet_info - \tspi->e2e_addr  == %u.%u.%u.%u", 0x0ff & spi->e2e_addr, 0x0ff & (spi->e2e_addr >> 8), 0x0ff & (spi->e2e_addr >> 16), 0x0ff & (spi->e2e_addr >> 24));
+			printk(KERN_INFO "SUPERMAN: packet_info - \tspi->iph->saddr == %u.%u.%u.%u", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24));
+			printk(KERN_INFO "SUPERMAN: packet_info - \tspi->iph->daddr == %u.%u.%u.%u", 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
+		}
 	}
 
 	// Address information about the origin/destination of this packet.	
@@ -142,7 +151,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 			case SUPERMAN_DISCOVERY_REQUEST_TYPE:
 			case SUPERMAN_CERTIFICATE_REQUEST_TYPE:
 				spi->e2e_secure_packet = false;
-				spi->p2p_secure_packet = true;
+				spi->p2p_secure_packet = false;
 				break;
 			// For certain packet types, we use the broadcast key for e2e (although not for p2p)
 			case SUPERMAN_AUTHENTICATED_SK_REQUEST_TYPE:
@@ -154,8 +163,12 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 		}
 	}
 
+	// Deal with the case where we were the source
+	//if(spi->e2e_addr == htonl(0))
+	//	spi->p2p_secure_packet = false;
+
 	// If we're dealing with LOCAL_OUT or LOCAL_IN we'll be needing the E2E security details.
-	if(spi->ops != NULL && (spi->ops->hooknum == NF_INET_LOCAL_OUT || spi->ops->hooknum == NF_INET_LOCAL_IN))
+	if(spi->state != NULL && (spi->state->hook == NF_INET_LOCAL_OUT || spi->state->hook == NF_INET_LOCAL_IN))
 	{
 		// If we should use the broadcast key and we don't have one. 
 		if(spi->e2e_use_broadcast_key && (!GetSecurityTableEntry(INADDR_BROADCAST, &(spi->e2e_security_details))))
@@ -171,7 +184,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 	}
 
 	// If we're dealing with PRE_ROUTING OR POST_ROUTING we'll be needing the P2P security details. 
-	if(spi->shdr != NULL && spi->ops != NULL && (spi->ops->hooknum == NF_INET_POST_ROUTING || spi->ops->hooknum == NF_INET_PRE_ROUTING))
+	if(spi->shdr != NULL && spi->state != NULL && (spi->state->hook == NF_INET_POST_ROUTING || spi->state->hook == NF_INET_PRE_ROUTING))
 	{
 		spi->p2p_our_addr = htonl(0);
 		spi->p2p_neighbour_addr = htonl(0);
@@ -184,7 +197,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 		else
 		{
 			// If the packet is on it's way out...
-			if(spi->ops->hooknum == NF_INET_POST_ROUTING)
+			if(spi->state->hook == NF_INET_POST_ROUTING)
 			{
 				// We need the next hops IP address and security credentials.
 				struct rtable* rt;
@@ -209,7 +222,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 			}
 
 			// If the packet is on it's way in...
-			if(spi->ops->hooknum == NF_INET_PRE_ROUTING)
+			if(spi->state->hook == NF_INET_PRE_ROUTING)
 			{
 				// We need the the last hops IP address and security credentials.
 				spi->p2p_neighbour_addr = spi->shdr->last_addr;
@@ -218,7 +231,7 @@ struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *
 
 			spi->p2p_has_security_details = GetSecurityTableEntry(spi->p2p_neighbour_addr, &(spi->p2p_security_details));
 
-			// printk(KERN_INFO "SUPERMAN: Packet (packet_info) - when: %s, p2p_neighbour: %u.%u.%u.%u, p2p_our_addr: %u.%u.%u.%u, p2p_has_security_details: %s.\n", (spi->ops->hooknum == NF_INET_POST_ROUTING ? "outgoing" : "incoming"), 0x0ff & spi->p2p_neighbour_addr, 0x0ff & (spi->p2p_neighbour_addr >> 8), 0x0ff & (spi->p2p_neighbour_addr >> 16), 0x0ff & (spi->p2p_neighbour_addr >> 24), 0x0ff & spi->p2p_our_addr, 0x0ff & (spi->p2p_our_addr >> 8), 0x0ff & (spi->p2p_our_addr >> 16), 0x0ff & (spi->p2p_our_addr >> 24), (spi->p2p_has_security_details ? "true" : "false"));
+			// printk(KERN_INFO "SUPERMAN: Packet (packet_info) - when: %s, p2p_neighbour: %u.%u.%u.%u, p2p_our_addr: %u.%u.%u.%u, p2p_has_security_details: %s.\n", (spi->state->hooknum == NF_INET_POST_ROUTING ? "outgoing" : "incoming"), 0x0ff & spi->p2p_neighbour_addr, 0x0ff & (spi->p2p_neighbour_addr >> 8), 0x0ff & (spi->p2p_neighbour_addr >> 16), 0x0ff & (spi->p2p_neighbour_addr >> 24), 0x0ff & spi->p2p_our_addr, 0x0ff & (spi->p2p_our_addr >> 8), 0x0ff & (spi->p2p_our_addr >> 16), 0x0ff & (spi->p2p_our_addr >> 24), (spi->p2p_has_security_details ? "true" : "false"));
 		}
 	}
 
@@ -247,7 +260,7 @@ unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi)
 		if(spi->state != NULL && spi->state->okfn != NULL)
 		{
 			printk(KERN_INFO "SUPERMAN: packet_info: \tCalling the OK function because we stole the packet...\n");
-			spi->state->okfn(spi->state->sk, spi->skb);
+			spi->state->okfn(spi->state->net, spi->state->sk, spi->skb);
 		}
 	}
 	else if(!spi->use_callback && spi->result == NF_STOLEN && spi->skb != NULL)

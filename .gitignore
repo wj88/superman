@@ -20,4 +20,6 @@ test/openssl/*
 test/openssl
 test/pkgs/*
 test/pkgs
+test/mountpoint/*
+test/mountpoint
 daemon/superman

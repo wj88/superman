@@ -123,7 +123,7 @@ inline struct superman_header* get_superman_header(struct sk_buff *skb)
 
 unsigned int send_superman_packet(struct sk_buff* tx_sk, bool has_dst)
 {
-	struct superman_packet_info* spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	struct superman_packet_info* spi = MallocSupermanPacketInfo(tx_sk, NULL);
 	spi->result = NF_ACCEPT;
 
 	tx_sk->protocol = htons(ETH_P_IP);
@@ -146,7 +146,7 @@ unsigned int send_superman_packet(struct sk_buff* tx_sk, bool has_dst)
 	}
 
 	if(spi->result != NF_DROP)
-		if(ip_local_out(tx_sk) == NF_DROP)
+		if(ip_local_out(dev_net(tx_sk->dev), tx_sk->sk, tx_sk) == NF_DROP)
 			spi->result = NF_DROP;
 
 	return FreeSupermanPacketInfo(spi);
@@ -400,7 +400,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	iph->daddr = baddr;							// Broadcast the message to all on the subnet
 
 	send_superman_packet(tx_sk, false);
-	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//spi = MallocSupermanPacketInfo(tx_sk, NULL);
 	//send_superman_packet(spi, true);
 
 	INTERFACE_ITERATOR_END
@@ -483,7 +483,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	iph->daddr = addr;								// Broadcast the message to all on the subnet
 
 	send_superman_packet(tx_sk, false);
-	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//spi = MallocSupermanPacketInfo(tx_sk, NULL);
 	//send_superman_packet(spi, true);
 	
 	// Dereference the device.
@@ -590,7 +590,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	// 	kfree_skb(tx_sk);
 	// }
 
-	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//spi = MallocSupermanPacketInfo(tx_sk, NULL);
 	//AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	// Dereference the device.
@@ -701,7 +701,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	//	kfree_skb(tx_sk);
 	// }
 
-	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//spi = MallocSupermanPacketInfo(tx_sk, NULL);
 	//AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	// Dereference the device.
@@ -1020,7 +1020,7 @@ void SendSKInvalidatePacket(uint32_t addr)
 	//	kfree_skb(tx_sk);
 	// }
 
-	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//spi = MallocSupermanPacketInfo(tx_sk, NULL);
 	//AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	INTERFACE_ITERATOR_END
@@ -1123,7 +1123,7 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	//	kfree_skb(tx_sk);
 	// }
 
-	//spi = MallocSupermanPacketInfo(NULL, tx_sk, NULL);
+	//spi = MallocSupermanPacketInfo(tx_sk, NULL);
 	//AddE2ESecurity(spi, hash_then_send_superman_packet);
 
 	INTERFACE_ITERATOR_END

@@ -2,9 +2,10 @@
 
 . ./common.sh
 
+aptInstall "qemu uml-utilities bridge-utils gnome-terminal"
+
 echob Starting simulation...
-echo "	Requesting sudo permission..."
-sudo echo "	... sudo permission granted."
+sudo sleep 0.1
 
 ./run.sh 2 &
 sleep 5

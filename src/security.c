@@ -30,7 +30,7 @@ static struct superman_packet_callback_arg* alloc_tmp_e2e(struct superman_packet
 		len += crypto_aead_alignmask(aead) & ~(crypto_tfm_ctx_alignment() - 1);
 		len = ALIGN(len, crypto_tfm_ctx_alignment());
 	}
-	len += sizeof(struct aead_givcrypt_request) + crypto_aead_reqsize(aead);
+	len += sizeof(struct aead_request) + crypto_aead_reqsize(aead);
 	len = ALIGN(len, __alignof__(struct scatterlist));
 	len += sizeof(struct scatterlist) * nfrags;
 
@@ -62,14 +62,6 @@ static inline u8 *tmp_iv(struct crypto_aead *aead, void *tmp, int seqhilen)
 	return crypto_aead_ivsize(aead) ? PTR_ALIGN((u8 *)tmp + seqhilen, crypto_aead_alignmask(aead) + 1) : tmp + seqhilen;
 }
 
-static inline struct aead_givcrypt_request *tmp_givreq(struct crypto_aead *aead, u8 *iv)
-{
-	struct aead_givcrypt_request *req;
-	req = (void *)PTR_ALIGN(iv + crypto_aead_ivsize(aead), crypto_tfm_ctx_alignment());
-	aead_givcrypt_set_tfm(req, aead);
-	return req;
-}
-
 static inline struct aead_request *tmp_req(struct crypto_aead *aead, u8 *iv)
 {
 	struct aead_request *req;
@@ -81,11 +73,6 @@ static inline struct aead_request *tmp_req(struct crypto_aead *aead, u8 *iv)
 static inline struct scatterlist *req_sg(struct crypto_aead *aead, struct aead_request *req)
 {
 	return (void *)ALIGN((unsigned long)(req + 1) + crypto_aead_reqsize(aead), __alignof__(struct scatterlist));
-}
-
-static inline struct scatterlist *givreq_sg(struct crypto_aead *aead, struct aead_givcrypt_request *req)
-{
-        return (void *)ALIGN((unsigned long)(req + 1) + crypto_aead_reqsize(aead), __alignof__(struct scatterlist));
 }
 
 bool UpdateBroadcastKey(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, bool overwrite)

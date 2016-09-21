@@ -28,7 +28,6 @@ struct superman_packet_info
 	struct list_head list;
 
 	// Information provided by the hook function where the SPI originated.
-	const struct nf_hook_ops *ops;
 	struct sk_buff *skb;
 	const struct nf_hook_state *state;
 
@@ -77,7 +76,7 @@ struct superman_packet_info
 };
 
 //uint16_t GetNextTimestampFromSupermanPacketInfo(struct superman_packet_info* spi);
-struct superman_packet_info* MallocSupermanPacketInfo(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state);
+struct superman_packet_info* MallocSupermanPacketInfo(struct sk_buff *skb, const struct nf_hook_state *state);
 unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi);
 
 #endif

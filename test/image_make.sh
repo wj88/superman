@@ -11,7 +11,7 @@ if [ "$1" = "clean" ]; then
 fi
 
 # Required packages
-aptInstall "debootstrap unionfs-fuse"
+aptInstall "debootstrap unionfs-fuse qemu-utils"
 
 IMG_NAME="rootfs.qcow2"
 
@@ -58,11 +58,9 @@ if [[ ! -d ./rootfs-prereqs ]]; then
 
 
 	. ./prereq_install.sh
-	. ./openssl_install.sh
 
 	echo Preparing prerequisits...
 	prereqInstall ./rootfs-prereqs
-	opensslInstallInto ./rootfs-prereqs
 
 fi
 ROOTFS_UNION=rootfs-prereqs:${ROOTFS_UNION}
@@ -93,7 +91,7 @@ if [ ! -f ${IMG_NAME} ]; then
 	echob Partition and formatting the disk image partition...
 
 	# Create the partition table with a single partition
-	sudo sfdisk -q -L -D -uS /dev/nbd0 2>&1 >/dev/null << EOF
+	sudo sfdisk -q -uS /dev/nbd0 2>&1 >/dev/null << EOF
 ,,,-
 EOF
 

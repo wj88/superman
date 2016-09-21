@@ -16,13 +16,12 @@
 #include "queue.h"
 
 #define HOOK_DEF(func_name, ops_name, hook_num)																	\
-unsigned int func_name(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state);		\
+unsigned int func_name(void* priv, struct sk_buff *skb, const struct nf_hook_state *state);		\
 static struct nf_hook_ops ops_name = {																		\
-	.owner      	= THIS_MODULE,																		\
 	.hook 		= func_name,																		\
+	.pf		= NFPROTO_IPV4,																		\
 	.hooknum 	= hook_num,																		\
-	.pf		= PF_INET,																		\
-	.priority	= NF_IP_PRI_FIRST																	\
+	.priority	= NF_IP_PRI_FIRST,																	\
 };
 
 // Useful reference: http://phrack.org/issues/61/13.html
@@ -539,7 +538,7 @@ unsigned int hook_localout_post_sk_response(struct superman_packet_info* spi, bo
 }
 
 // After sanity checks, before routing decisions.
-unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
+unsigned int hook_prerouting(void* priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING)\n");
@@ -556,7 +555,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 	}
 
 	// Construct a new SPI to handle this packet.
-	spi = MallocSupermanPacketInfo(ops, skb, state);
+	spi = MallocSupermanPacketInfo(skb, state);
 
 	// printk(KERN_INFO "SUPERMAN: Netfilter (PREROUTING) - \tPacket Received from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
@@ -635,7 +634,7 @@ unsigned int hook_prerouting(const struct nf_hook_ops *ops, struct sk_buff *skb,
 }
 
 // After routing decisions if packet is for this host.
-unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
+unsigned int hook_localin(void* priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN)\n");
@@ -645,7 +644,7 @@ unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 		return NF_ACCEPT;
 
 	// Construct a new SPI to handle this packet.
-	spi = MallocSupermanPacketInfo(ops, skb, state);
+	spi = MallocSupermanPacketInfo(skb, state);
 
 	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALIN) - \tfrom %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
@@ -696,7 +695,7 @@ unsigned int hook_localin(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 /*
 
 // If the packet is destined for another interface.
-unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
+unsigned int hook_forward(void* priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	//if(is_valid_ip_packet(skb) && is_superman_packet(skb))
 		return NF_ACCEPT;
@@ -708,7 +707,7 @@ unsigned int hook_forward(const struct nf_hook_ops *ops, struct sk_buff *skb, co
 
 
 // For packets coming from local processes on their way out.
-unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
+unsigned int hook_localout(void* priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT)\n");
@@ -718,7 +717,7 @@ unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, c
 		return NF_ACCEPT;
 
 	// Construct a new SPI to handle this packet.
-	spi = MallocSupermanPacketInfo(ops, skb, state);
+	spi = MallocSupermanPacketInfo(skb, state);
 
 	// printk(KERN_INFO "SUPERMAN: Netfilter (LOCALOUT) - \tPacket Send from %u.%u.%u.%u to %u.%u.%u.%u...\n", 0x0ff & spi->iph->saddr, 0x0ff & (spi->iph->saddr >> 8), 0x0ff & (spi->iph->saddr >> 16), 0x0ff & (spi->iph->saddr >> 24), 0x0ff & spi->iph->daddr, 0x0ff & (spi->iph->daddr >> 8), 0x0ff & (spi->iph->daddr >> 16), 0x0ff & (spi->iph->daddr >> 24));
 
@@ -773,7 +772,7 @@ unsigned int hook_localout(const struct nf_hook_ops *ops, struct sk_buff *skb, c
 }
 
 // Just before outbound packets "hit the wire".
-unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct nf_hook_state *state)
+unsigned int hook_postrouting(void* priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
 	struct superman_packet_info* spi;
 	// printk(KERN_INFO "SUPERMAN: Netfilter (POSTROUTING)\n");
@@ -783,7 +782,7 @@ unsigned int hook_postrouting(const struct nf_hook_ops *ops, struct sk_buff *skb
 		return NF_ACCEPT;
 
 	// Construct a new SPI to handle this packet.
-	spi = MallocSupermanPacketInfo(ops, skb, state);
+	spi = MallocSupermanPacketInfo(skb, state);
 
 	// Deal with special case SUPERMAN packets which we leave alone (after all, we made them)!
 	if(spi->shdr)

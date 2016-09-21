@@ -1,0 +1,9 @@
+[Unit]
+Description=configure and load SUPERMAN
+
+[Service]
+Type=simple
+ExecStart=/bin/configure_node
+
+[Install]
+WantedBy=multi-user.target

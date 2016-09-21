@@ -2,8 +2,6 @@
 
 . ./common.sh
 
-aptInstall "qemu uml-utilities bridge-utils gnome-terminal"
-
 startTerm()
 {
 	echob Starting QEMU emulation for node ${NODE_ID}...
@@ -23,7 +21,7 @@ startQemu()
 	local QEMU_ARGS=$(echo \
 	-kernel /boot/vmlinuz-`uname -r` \
 	-initrd /boot/initrd.img-`uname -r` \
-	--append \"root=/dev/sda1 ip=dhcp rd.shell=1 console=ttyS0 raid=noautodetect ipv6.disable=1 supermanid=${NODE_ID}\" \
+	--append \"root=/dev/sda1 rw ip=dhcp rd.shell=1 console=ttyS0 raid=noautodetect ipv6.disable=1 net.ifnames=0 biosdevname=0 supermanid=${NODE_ID}\" \
 	-drive file=rootfs.qcow2 -snapshot \
 	-m 512M \
 	-net nic,vlan=0,macaddr=52:54:00:12:34:${PADDED_NODE_ID} \
