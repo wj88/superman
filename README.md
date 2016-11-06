@@ -97,7 +97,7 @@ Clone the repository and change into the test directory:
 
 ```
 
-git clone git@bitbucket.org:wj88/superman.git
+git clone https://bitbucket.org/wj88/superman.git
 cd superman/test
 ```
 
@@ -143,6 +143,8 @@ To verify the communication between nodes was in fact secured, the pcap files fo
 
 ./run-wireshark
 ````
+
+From withim wireshark, open up the individual nodes pcap files from /tmp.
 
 
   
