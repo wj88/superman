@@ -49,7 +49,7 @@ static bool alloc_tmp_p2p(struct superman_packet_info* spi, struct crypto_ahash*
 	spi->tmp = kmalloc(len, GFP_ATOMIC);
 	if(spi->tmp)
 		memset(spi->tmp, 0, len);
-	return (spi->tmp);	
+	return (spi->tmp);
 }
 
 static inline __be32 *tmp_seqhi(void *tmp)
@@ -81,9 +81,9 @@ bool UpdateBroadcastKey(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, un
 	uint8_t flag = 0;
 
 	// If we already have a valid entry and we're not being asked to overwrite it.
-	if(!overwrite && GetSecurityTableEntry(INADDR_BROADCAST, &entry) && entry->flag >= 3)
+	if(!overwrite && GetSecurityTableEntry(INADDR_BROADCAST, &entry) && entry->flag >= SUPERMAN_SECURITYTABLE_FLAG_SEC_UNVERIFIED)
 	{
-		printk(KERN_INFO "Security:\tUpdateBroadcastKey - not overwriting, entry exists.\n");
+		//printk(KERN_INFO "Security:\tUpdateBroadcastKey - not overwriting, entry exists.\n");
 		return true;
 	}
 
@@ -95,18 +95,18 @@ bool UpdateBroadcastKey(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, un
 		// Do we also have ske and skp?
 		if(ske_len > 0 && skp_len > 0 && ske != NULL && skp != NULL)
 		{
-			flag = 3;
+			flag = SUPERMAN_SECURITYTABLE_FLAG_SEC_VERIFIED;
 			// printk(KERN_INFO "Security:\tUpdateBroadcastKey - ske and skp provided.\n");
 		}
 		else
 		{
-			flag = 2;
+			flag = SUPERMAN_SECURITYTABLE_FLAG_SEC_UNVERIFIED;
 			// printk(KERN_INFO "Security:\tUpdateBroadcastKey - ske and skp not provided.\n");
 		}
 	}
 	else
 	{
-		flag = 0;
+		flag = SUPERMAN_SECURITYTABLE_FLAG_SEC_NONE;
 		// printk(KERN_INFO "Security:\tUpdateBroadcastKey - sk not provided.\n");
 	}
 
@@ -147,7 +147,7 @@ void dump_packet(struct sk_buff* skb)
 
 	len = skb->len;
 
-	scatterwalk_start(&walk, sg);	
+	scatterwalk_start(&walk, sg);
 
 	while (len) {
 		n = scatterwalk_clamp(&walk, len);
@@ -223,7 +223,7 @@ unsigned int AddE2ESecurityDone(struct superman_packet_info* spi, unsigned int (
 {
 	bool result = false;
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone)...\n");
-	
+
 	if(err == 0)
 	{
 		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone) - Crypto completed successfully.");
@@ -231,9 +231,12 @@ unsigned int AddE2ESecurityDone(struct superman_packet_info* spi, unsigned int (
 
 		// Discussed this with Andrew - we cannot trim the excess bytes and need to leave in the full block.
 
-		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone) - Packet length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
-		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone) - Packet contents:\n");
-		// dump_packet(spi->skb);
+		//printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone) - Packet length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
+		//printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurityDone) - Packet contents:\n");
+		//dump_packet(spi->skb);
+
+		// Put the cached ttl back in the IP header
+		spi->iph->ttl = spi->ttl;
 
 		ip_send_check(spi->iph);
 		result = true;
@@ -284,6 +287,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	struct aead_request *req;
 
 	//printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Adding E2E security using %s key...\n", (spi->e2e_use_broadcast_key ? "broadcast" : "destinations"));
+	//dump_bytes(spi->e2e_security_details->ske, spi->e2e_security_details->ske_len);
 
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Packet length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Packet contents:\n");
@@ -294,7 +298,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Not a secured packet.\n");
 		spi->result = NF_ACCEPT;
-		return NF_ACCEPT;
+		return callback(spi, true);
 	}
 
 	// If we don't have the security details.
@@ -302,8 +306,15 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - We don't have their security details.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
+
+	// Cache the ttl
+	spi->ttl = spi->iph->ttl;
+	spi->iph->ttl = 0;
+
+	// Reset the last_addr
+	spi->shdr->last_addr = htonl(0);
 
 	// Start with a zero checksum.
 	spi->iph->check = 0;
@@ -317,7 +328,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Failed to set the security key");
 		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key len: %u, Key %u, err: %d, flags: %x.\n", spi->e2e_security_details->ske_len, (uint32_t)(spi->e2e_security_details->ske), err, crypto_aead_get_flags(aead));
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	//printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Key len: %u, Key %u, err: %d, flags: %x.\n", spi->e2e_security_details->ske_len, *(uint32_t*)(spi->e2e_security_details->ske), err, crypto_aead_get_flags(aead));
@@ -327,7 +338,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 
 	// IV bytes len
 	iv_len = crypto_aead_ivsize(aead);
-	
+
 	// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Requested auth len: %u, Actual auth len: %u, IV len: %u\n", MAC_LEN, auth_len, iv_len);
 
 	// Size of a single block
@@ -350,8 +361,8 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - skb_cow_data failed.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
-	}	
+		return callback(spi, false);
+	}
 
 	// Increment the IP header to match the increase in packet size.
 	spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) + padding_len + auth_len);
@@ -381,7 +392,7 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - alloc_tmp_e2e failed.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 	seqhi = tmp_seqhi(spi->tmp);
 	iv = tmp_iv(aead, spi->tmp, seqhilen);
@@ -413,8 +424,8 @@ unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Crypto is running asyncronously, stealing packet...\n");
 		spi->result = NF_STOLEN;
-	}	
-	// Crypto finished immediately, go straight to the end. 
+	}
+	// Crypto finished immediately, go straight to the end.
 	else
 	{
 		// printk(KERN_INFO "SUPERMAN: Security (AddE2ESecurity) - Crypto is running syncronously...\n");
@@ -451,6 +462,9 @@ unsigned int RemoveE2ESecurityDone(struct superman_packet_info* spi, unsigned in
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - Packet contents:\n");
 		// dump_packet(spi->skb);
 
+		// Put the cached ttl back in the IP header
+		spi->iph->ttl = spi->ttl;
+
 		ip_send_check(spi->iph);
 		result = true;
 	}
@@ -459,6 +473,8 @@ unsigned int RemoveE2ESecurityDone(struct superman_packet_info* spi, unsigned in
 		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - Crypto failed. err: %d, flags: %x.\n", err, crypto_aead_get_flags(aead));
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - Packet contents:\n");
 		// dump_packet(spi->skb);
+		//printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurityDone) - E2E Key:\n");
+		//dump_bytes(spi->e2e_security_details->ske, spi->e2e_security_details->ske_len);
 	}
 
 	if(spi->tmp != NULL)
@@ -529,14 +545,12 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 
 	//printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Removing E2E security using %s key...\n", (spi->e2e_use_broadcast_key ? "broadcast" : "destinations"));
 
-	spi->shdr->last_addr = 0;
-
 	// If we don't need to secure this packet, accept it.
 	if(!spi->e2e_secure_packet)
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Not a secured packet.\n");
 		spi->result = NF_ACCEPT;
-		return NF_ACCEPT;
+		return callback(spi, true);
 	}
 
 	// If we don't have the security details.
@@ -544,15 +558,22 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - We don't have their security details.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
+
+	// Cache the ttl
+	spi->ttl = spi->iph->ttl;
+	spi->iph->ttl = 0;
+
+	// Reset the last_addr
+	spi->shdr->last_addr = htonl(0);
 
 	// Start with a zero checksum.
 	spi->iph->check = 0;
-	
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
-	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet contents:\n");
-	// dump_packet(spi->skb);
+
+	//printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet length before security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
+	//printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Packet contents:\n");
+	//dump_packet(spi->skb);
 
 	// We have a key to use, load it into the crypto process.
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Key:\n");
@@ -561,15 +582,15 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Failed to set the security key.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
-	
+
 	// Auth bytes len
 	auth_len = crypto_aead_authsize(aead);
 
 	// IV bytes len
 	iv_len = crypto_aead_ivsize(aead);
-	
+
 	// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Requested auth len: %u, Actual auth len: %u, IV len: %u\n", MAC_LEN, auth_len, iv_len);
 
 	// Size of a single block
@@ -592,7 +613,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - skb_cow_data failed.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	// We need some temporary memory to store stuff. Allocate the memory then divide it up.
@@ -604,7 +625,7 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - alloc_tmp_e2e failed.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 	seqhi = tmp_seqhi(spi->tmp);
 	iv = tmp_iv(aead, spi->tmp, seqhilen);
@@ -634,8 +655,8 @@ unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Crypto is running asyncronously, stealing packet...\n");
 		spi->result = NF_STOLEN;
-	}	
-	// Crypto finished immediately, go straight to the end. 
+	}
+	// Crypto finished immediately, go straight to the end.
 	else
 	{
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveE2ESecurity) - Crypto is running syncronously...\n");
@@ -659,7 +680,7 @@ unsigned int AddP2PSecurityDone(struct superman_packet_info* spi, unsigned int (
 		// Make sure there is space for our HMAC to go at the end of the data.
 		if(skb_cow_data(spi->skb, HMAC_LEN, &trailer) >= 0)
 		{
-			// Grab the space for the correct number of bytes. 
+			// Grab the space for the correct number of bytes.
 			unsigned char* tail = pskb_put(spi->skb, trailer, HMAC_LEN);
 
 			// Copy the HMAC into the allocated space.
@@ -671,6 +692,9 @@ unsigned int AddP2PSecurityDone(struct superman_packet_info* spi, unsigned int (
 			// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurityDone) - Packet length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 			// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurityDone) - Packet contents:\n");
 			// dump_packet(spi->skb);
+
+			// Put the cached ttl back in the IP header
+			spi->iph->ttl = spi->ttl;
 
 			ip_send_check(spi->iph);
 			result = true;
@@ -723,7 +747,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Not a secured packet.\n");
 		spi->result = NF_ACCEPT;
-		return NF_ACCEPT;
+		return callback(spi, true);
 	}
 
 	// If we don't have the security details.
@@ -731,7 +755,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - We don't have their security details.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	// Add the our address to the header.
@@ -743,7 +767,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Failed to set the security key.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	// Grab the scatterlist length.
@@ -753,7 +777,7 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - skb_cow_data failed.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	// Allocate some memory attached to spi->tmp to host the resulting hash and the scatter list.
@@ -762,11 +786,15 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - alloc_tmp_p2p failed.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	// Start with a zero checksum.
 	spi->iph->check = 0;
+
+	// Cache the ttl
+	spi->ttl = spi->iph->ttl;
+	spi->iph->ttl = 0;
 
 	// Grab a reference to the hash buffer portion of our memory allocation
 	hash_buffer = spi->tmp;
@@ -801,8 +829,8 @@ unsigned int AddP2PSecurity(struct superman_packet_info* spi, unsigned int (*cal
 	{
 		printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Crypto is running asyncronously, stealing packet...\n");
 		spi->result = NF_STOLEN;
-	}	
-	// Crypto finished immediately, go straight to the end. 
+	}
+	// Crypto finished immediately, go straight to the end.
 	else
 	{
 		// printk(KERN_INFO "SUPERMAN: Security (AddP2PSecurity) - Crypto is running syncronously...\n");
@@ -857,7 +885,10 @@ unsigned int RemoveP2PSecurityDone(struct superman_packet_info* spi, unsigned in
 		spi->iph->tot_len = htons(ntohs(spi->iph->tot_len) - HMAC_LEN);
 
 		// Remove the last_addr
-		spi->shdr->last_addr = 0;
+		spi->shdr->last_addr = htonl(0);
+
+		// Put the cached ttl back in the IP header
+		spi->iph->ttl = spi->ttl;
 
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - Packet length after security: %u, IP Header Total Length: %u\n", spi->skb->len, ntohs(spi->iph->tot_len));
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurityDone) - Packet contents:\n");
@@ -911,7 +942,7 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - Not a secured packet.\n");
 
 		spi->result = NF_ACCEPT;
-		return NF_ACCEPT;
+		return callback(spi, true);
 	}
 
 	// If we don't have the security details.
@@ -919,7 +950,7 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - We don't have their security details.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	// We have a key to use, load it into the crypto process.
@@ -927,7 +958,7 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - Failed to set the security key.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	// Grab the scatterlist length.
@@ -936,7 +967,7 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - skb_cow_data failed.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	// Allocate some memory attached to spi->tmp to host the resulting hash and the scatter list.
@@ -944,11 +975,15 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - alloc_tmp_p2p failed.\n");
 		spi->result = NF_DROP;
-		return NF_DROP;
+		return callback(spi, false);
 	}
 
 	// Start with a zero checksum.
 	spi->iph->check = 0;
+
+	// Cache the ttl
+	spi->ttl = spi->iph->ttl;
+	spi->iph->ttl = 0;
 
 	// Grab a reference to the hash buffer portion of our memory allocation
 	hash_buffer = spi->tmp;
@@ -983,8 +1018,8 @@ unsigned int RemoveP2PSecurity(struct superman_packet_info* spi, unsigned int (*
 	{
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - Crypto is running asyncronously, stealing packet...\n");
 		spi->result = NF_STOLEN;
-	}	
-	// Crypto finished immediately, go straight to the end. 
+	}
+	// Crypto finished immediately, go straight to the end.
 	else
 	{
 		// printk(KERN_INFO "SUPERMAN: Security (RemoveP2PSecurity) - Crypto is running syncronously...\n");
@@ -1003,13 +1038,13 @@ bool InitSecurity(void)
 	if(IS_ERR(aead))
 	{
 		aead = NULL;
-		printk(KERN_ERR "SUPERMAN: Security - Failed to alloc aead.\n"); 
+		printk(KERN_ERR "SUPERMAN: Security - Failed to alloc aead.\n");
 		return false;
 	}
 
 	if(crypto_aead_setauthsize(aead, MAC_LEN) != 0)
 	{
-		printk(KERN_ERR "SUPERMAN: Security - Failed to set auth size.\n"); 
+		printk(KERN_ERR "SUPERMAN: Security - Failed to set auth size.\n");
 		DeInitSecurity();
 		return false;
 	}
@@ -1017,7 +1052,7 @@ bool InitSecurity(void)
 	ahash = crypto_alloc_ahash(HMAC_ALG_NAME, 0, 0);
 	if(IS_ERR(aead))
 	{
-		printk(KERN_ERR "SUPERMAN: Security - Failed to alloc ahash.\n"); 
+		printk(KERN_ERR "SUPERMAN: Security - Failed to alloc ahash.\n");
 		DeInitSecurity();
 		return false;
 	}
@@ -1077,6 +1112,16 @@ EVP_PKEY*	node_privatekey			= NULL;
 DH*		node_privatekey_dh		= NULL;
 BIGNUM*		node_publickey			= NULL;
 
+void DumpKeys(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp)
+{
+	lprintf("Security: SK (%d bytes):\n", sk_len);
+	BIO_dump(outbio, sk, sk_len);
+	lprintf("Security: SKE (%d bytes):\n", skp_len);
+	BIO_dump(outbio, ske, ske_len);
+	lprintf("Security: SKP (%d bytes):\n", skp_len);
+	BIO_dump(outbio, skp, skp_len);
+}
+
 bool MallocAndCopyPublickey(uint32_t* sk_len, unsigned char** sk)
 {
 	*sk_len = 0;
@@ -1134,21 +1179,21 @@ bool MallocAndGenerateNewKey(uint32_t* key_len, unsigned char** key)
 
 bool LoadFile(unsigned char* filename, uint32_t* data_len, unsigned char** data)
 {
-	// printf("Security: Loading %s...\n", filename);
+	// lprintf("Security: Loading %s...\n", filename);
 	int fd;
 	struct stat file_info;
 
 	if (access(filename, F_OK) != 0)
 	{
-		if (errno == ENOENT) 
-			printf("Security: \tFile does not exist: %s\n", filename);
-		else if (errno == EACCES) 
-			printf("Security: \tFile is not accessible: %s\n", filename);
+		if (errno == ENOENT)
+			lprintf("Security: \tFile does not exist: %s\n", filename);
+		else if (errno == EACCES)
+			lprintf("Security: \tFile is not accessible: %s\n", filename);
 		return NULL;
 	}
 	if (access(filename, R_OK) != 0)
 	{
-		printf("Security: \tFile is not readable (access denied): %s\n", filename);
+		lprintf("Security: \tFile is not readable (access denied): %s\n", filename);
 		return NULL;
 	}
 
@@ -1159,38 +1204,38 @@ bool LoadFile(unsigned char* filename, uint32_t* data_len, unsigned char** data)
 	int bytes_read;
 	bytes_read = read(fd, *data, *data_len);
 	if(bytes_read != *data_len)
-		printf("Security: \tBytes read isn't file length: %s\n", filename);
+		lprintf("Security: \tBytes read isn't file length: %s\n", filename);
 	close(fd);
-	// printf("Security: \tloaded %u bytes (file size %u bytes).\n", bytes_read, *data_len);
+	// lprintf("Security: \tloaded %u bytes (file size %u bytes).\n", bytes_read, *data_len);
 
 	return data;
 }
 
 bool LoadCertificate(uint32_t cert_data_len, unsigned char* cert_data, BIO** certbio, X509** cert)
 {
-	// printf("Security: \tLoading certificate...\n");
+	// lprintf("Security: \tLoading certificate...\n");
 
 	*certbio = NULL;
 	*cert = NULL;
 
 	// Load the certificate from memory (PEM)
         // and cacert chain from file (PEM)
-	// printf("Security: \tCalling BIO_new_mem...\n");
+	// lprintf("Security: \tCalling BIO_new_mem...\n");
 	*certbio = BIO_new_mem_buf((void*)cert_data, cert_data_len);
 	if(*certbio == NULL) {
-		printf("Security: Error allocating BIO memory buffer.\n");
+		lprintf("Security: Error allocating BIO memory buffer.\n");
 		return false;
 	}
 
-	// printf("Security: \tCalling PEM_read_bio_x509...\n");
-	*cert = PEM_read_bio_X509(*certbio, NULL, 0, NULL);	
+	// lprintf("Security: \tCalling PEM_read_bio_x509...\n");
+	*cert = PEM_read_bio_X509(*certbio, NULL, 0, NULL);
 	if(*cert == NULL) {
-		printf("Security: Error loading cert into memory\n");
+		lprintf("Security: Error loading cert into memory\n");
 		BIO_free_all(*certbio);
 		return false;
 	}
 
-	// printf("Security: \tdone.\n");
+	// lprintf("Security: \tdone.\n");
 	return true;
 }
 
@@ -1212,7 +1257,7 @@ bool CheckKey(EVP_PKEY* pkey)
 {
 	if(pkey->type != EVP_PKEY_DH)
 	{
-		BIO_printf(outbio, "Security: We were expecting a Diffie Hellman key, that's not what we have.\n");		
+		BIO_printf(outbio, "Security: We were expecting a Diffie Hellman key, that's not what we have.\n");
 		switch (pkey->type)
 		{
 			case EVP_PKEY_RSA:
@@ -1237,7 +1282,7 @@ bool CheckKey(EVP_PKEY* pkey)
 BIGNUM* GetNodeShare(uint32_t cert_data_len, unsigned char* cert_data)
 {
 	// Load our public key from the certificate
-	// printf("Security: Extracting DH public key from certificate...\n");
+	// lprintf("Security: Extracting DH public key from certificate...\n");
 	BIO*		certbio		= NULL;
 	X509*		cert		= NULL;
 	if(!LoadCertificate(cert_data_len, cert_data, &certbio, &cert))
@@ -1281,8 +1326,8 @@ bool VerifyCertificate(uint32_t cert_data_len, unsigned char* cert_data, unsigne
 
 	int ret;
 
-	// printf("Security: Verifying certificate...\n");
-	
+	// lprintf("Security: Verifying certificate...\n");
+
 	if(!LoadCertificate(cert_data_len, cert_data, &certbio, &cert))
 		return false;
 
@@ -1344,12 +1389,12 @@ bool VerifyCertificate(uint32_t cert_data_len, unsigned char* cert_data, unsigne
 
 	if(ret == 1)
 	{
-		// printf("Security: ...certificate verified.\n");
+		// lprintf("Security: ...certificate verified.\n");
 		return true;
 	}
 	else
 	{
-		printf("Security: Certificate failed to verify.\n");
+		lprintf("Security: Certificate failed to verify.\n");
 		return false;
 	}
 }
@@ -1361,12 +1406,12 @@ bool MallocAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* s
 	*skp_len = SYM_KEY_LEN;
 	*skp = NULL;
 
-	// printf("Security: \tAllocating %u bytes for SKE and SKP...\n", SYM_KEY_LEN);
+	// lprintf("Security: \tAllocating %u bytes for SKE and SKP...\n", SYM_KEY_LEN);
 	if(	(!(*ske = (unsigned char*) malloc(*ske_len))) ||
 		(!(*skp = (unsigned char*) malloc(*skp_len)))
 	)
 	{
-		printf("Security: \tFailed to allocate the memory for SKE and SKP.\n");
+		lprintf("Security: \tFailed to allocate the memory for SKE and SKP.\n");
 
 		*ske_len = 0;
 		if(*ske) {
@@ -1383,14 +1428,14 @@ bool MallocAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* s
 
 	// https://www.openssl.org/docs/crypto/PKCS5_PBKDF2_HMAC.html
 
-	// printf("Security: \tUndertaking KDF...\n");
+	// lprintf("Security: \tUndertaking KDF...\n");
 
 	PKCS5_PBKDF2_HMAC_SHA1(sk, sk_len, NULL, 0, 1000, *ske_len, *ske);
-	// printf("Security: SKE generated:\n");
+	// lprintf("Security: SKE generated:\n");
 	//BIO_dump(outbio, *ske, *ske_len);
 
 	PKCS5_PBKDF2_HMAC_SHA1(sk, sk_len, NULL, 0, 2000, *skp_len, *skp);
-	// printf("Security: SKP generated:\n");
+	// lprintf("Security: SKP generated:\n");
 	//BIO_dump(outbio, *skp, *skp_len);
 
 	return true;
@@ -1403,35 +1448,35 @@ bool MallocAndDHAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32
 	BIGNUM* sk_bn = NULL;
 	bool result;
 
-	// printf("Security: \tConstructing a BIGNUM of the provided SK...\n");
+	// lprintf("Security: \tConstructing a BIGNUM of the provided SK...\n");
 	sk_bn = BN_bin2bn(sk, sk_len, NULL);
 	if(sk_bn == NULL)
 	{
-		printf("Security: \tFailed to construct the BIGNUM.\n\t\tError: \t%s\n", ERR_error_string(ERR_get_error(), NULL));
+		lprintf("Security: \tFailed to construct the BIGNUM.\n\t\tError: \t%s\n", ERR_error_string(ERR_get_error(), NULL));
 		return false;
 	}
 
-	// printf("Security: \tAllocating %u bytes of memory for the computed shared key...\n", cmb_len);
+	// lprintf("Security: \tAllocating %u bytes of memory for the computed shared key...\n", cmb_len);
 	cmb = (unsigned char*) malloc(cmb_len);
 	if(cmb == NULL)
 	{
-		printf("Security: \tFailed to allocate the memory for the computed shared key.\n");
+		lprintf("Security: \tFailed to allocate the memory for the computed shared key.\n");
 		BN_free(sk_bn);
 		return false;
 	}
 
-	// printf("Security: \tComputing the DH shared key...\n");
+	// lprintf("Security: \tComputing the DH shared key...\n");
 	cmb_len = DH_compute_key(cmb, sk_bn, node_privatekey_dh);
 	if(0 > cmb_len)
 	{
-		printf("Security: \tFailed to compute the shared key.\n");
+		lprintf("Security: \tFailed to compute the shared key.\n");
 		BN_free(sk_bn);
 		free(cmb);
 		return false;
 	}
 
 	BN_free(sk_bn);
-	
+
 	result = MallocAndGenerateSharedkeys(cmb_len, cmb, ske_len, ske, skp_len, skp);
 
 	free(cmb);
@@ -1461,7 +1506,7 @@ unsigned char* GenerateSharedSecret(uint32_t cert_data_len, unsigned char* cert_
 
 	BN_free(pubkey);
 
-	//printf("Security: Shared secret generated:\n");
+	//lprintf("Security: Shared secret generated:\n");
 	//BIO_dump(outbio, secret, secret_size);
 
 
@@ -1471,11 +1516,11 @@ unsigned char* GenerateSharedSecret(uint32_t cert_data_len, unsigned char* cert_
 	unsigned char* key2 = OPENSSL_malloc(sizeof(unsigned char) * SYM_KEY_LEN);
 
 	PKCS5_PBKDF2_HMAC_SHA1(secret, secret_size, NULL, 0, 1000, SYM_KEY_LEN, key1);
-	//printf("Security: Key 1 generated:\n");
+	//lprintf("Security: Key 1 generated:\n");
 	//BIO_dump(outbio, key1, SYM_KEY_LEN);
 
 	PKCS5_PBKDF2_HMAC_SHA1(secret, secret_size, NULL, 0, 2000, SYM_KEY_LEN, key2);
-	//printf("Security: Key 2 generated:\n");
+	//lprintf("Security: Key 2 generated:\n");
 	//BIO_dump(outbio, key2, SYM_KEY_LEN);
 
 	OPENSSL_free(key1);
@@ -1504,7 +1549,7 @@ bool TestCertificate(unsigned char* cert_filename)
 
 bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_filename, unsigned char* node_dh_privatekey_filename)
 {
-	// printf("Security: Reading certificate data...\n");
+	// lprintf("Security: Reading certificate data...\n");
 	if(
 		(!(LoadFile(ca_cert_filename, &ca_cert_data_len, &ca_cert_data))) ||
 		(!(LoadFile(node_cert_filename, &node_cert_data_len, &node_cert_data))) ||
@@ -1515,15 +1560,18 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 		return false;
 	}
 
-	// printf("Security: Initialising OpenSSL...\n");
+	// lprintf("Security: Initialising OpenSSL...\n");
 
 	OpenSSL_add_all_algorithms();
 	ERR_load_BIO_strings();
 	ERR_load_crypto_strings();
-	outbio  = BIO_new_fp(stdout, BIO_NOCLOSE);
+	if(use_logfile)
+		outbio = BIO_new_fp(log_file, BIO_NOCLOSE);
+	else
+		outbio  = BIO_new_fp(stdout, BIO_NOCLOSE);
 	RAND_poll();
 
-	// printf("Security: Loading the CA public certificate...\n");
+	// lprintf("Security: Loading the CA public certificate...\n");
 
 	// Load the up root CA's certificate.
 	if(!LoadCertificate(ca_cert_data_len, ca_cert_data, &ca_certbio, &ca_cert))
@@ -1548,7 +1596,7 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 		return false;
 	}
 
-	// printf("Security: Verifying our node certificate...\n");
+	// lprintf("Security: Verifying our node certificate...\n");
 	if(!VerifyCertificate(node_cert_data_len, node_cert_data, NULL, 0))
 	{
 		BIO_printf(outbio, "Security: Error verifying certificate\n");
@@ -1557,7 +1605,7 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 	}
 
 	// Load up our private key.
-	// printf("Security: Loading DH private key...\n");
+	// lprintf("Security: Loading DH private key...\n");
 	node_privatekeybio = BIO_new_mem_buf((void*)node_dh_privatekey_data, -1);
 	if(!(node_privatekey = PEM_read_bio_PrivateKey(node_privatekeybio, NULL, NULL, NULL)))
 	{
@@ -1571,7 +1619,7 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 	{
 		DeInitSecurity();
 		return false;
-	}		
+	}
 	else
 	{
 //		if(!PEM_write_bio_PrivateKey(outbio, node_privatekey, NULL, NULL, 0, 0, NULL))
@@ -1585,23 +1633,23 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 		DeInitSecurity();
 		return false;
 	}
-	
-	// printf("Security: Comparing the node private key with the node certificate...\n");
+
+	// lprintf("Security: Comparing the node private key with the node certificate...\n");
 	if(BN_cmp(node_privatekey_dh->pub_key, node_publickey) != 0)
 	{
-		BIO_printf(outbio, "Security: The nodes private key doesn't match the node certificate provided.");
+		BIO_printf(outbio, "Security: The nodes private key doesn't match the node certificate provided.\n");
 		DeInitSecurity();
 		return false;
 	}
 	else
 	{
-		// printf("Security: ...key match.\n");
+		// lprintf("Security: ...key match.\n");
 	}
 
 	// In userspace, we don't know if the kernel has a broadcast key.
 	uint32_t bk_len;
 	unsigned char* bk;
-	// printf("Security: \tGenerating a new broadcast key (just in case the kernel doesn't have one yet)...\n");
+	// lprintf("Security: \tGenerating a new broadcast key (just in case the kernel doesn't have one yet)...\n");
 	if(MallocAndGenerateNewKey(&bk_len, &bk))
 	{
 		uint32_t ske_len;
@@ -1609,10 +1657,10 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 		uint32_t skp_len;
 		unsigned char* skp;
 
-		// printf("Security: \tGenerating SKE and SKP for the new broadcast key (again, just in case)...\n");
+		// lprintf("Security: \tGenerating SKE and SKP for the new broadcast key (again, just in case)...\n");
 		if(MallocAndGenerateSharedkeys(bk_len, bk, &ske_len, &ske, &skp_len, &skp))
 		{
-			// printf("Security: \tUpdating the new broadcast key (again, just in case)...\n");
+			// lprintf("Security: \tUpdating the new broadcast key (again, just in case)...\n");
 			UpdateSupermanBroadcastKey(bk_len, bk, ske_len, ske, skp_len, skp, false);
 			free(ske);
 			ske = NULL;
@@ -1620,16 +1668,16 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 			skp = NULL;
 		}
 		else
-			printf("Security: \tFailed to generate SKE and SKP from the new broadcast key.\n");
+			lprintf("Security: \tFailed to generate SKE and SKP from the new broadcast key.\n");
 		free(bk);
-		bk = NULL;			
+		bk = NULL;
 	}
 
-	//printf("Security: Testing shared secret generator...\n");
+	//lprintf("Security: Testing shared secret generator...\n");
 	//unsigned char* secret = GenerateSharedSecret(node_cert_data_len, node_cert_data);
 	//OPENSSL_free(secret);
 
-	//printf("Security: Extracting DH public key...\n");
+	//lprintf("Security: Extracting DH public key...\n");
 	//ExtractPublicKey(node_cert_data);
 
 	return true;
@@ -1637,7 +1685,7 @@ bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_file
 
 void DeInitSecurity(void)
 {
-	// printf("Security: Unloading...\n");
+	// lprintf("Security: Unloading...\n");
 
 	if(ca_store)
 	{

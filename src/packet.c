@@ -81,7 +81,7 @@ inline bool if_info_from_net_device(__be32* addr, __be32* baddr, const struct ne
 		struct in_ifaddr *ifa;
 
 		// Search through the list for a matching device name.
-		
+
 		for (ifap = &indev->ifa_list; (ifa = *ifap) != NULL; ifap = &ifa->ifa_next)
 		{
 			if (strcmp(dev->name, ifa->ifa_label) == 0)
@@ -271,7 +271,7 @@ bool EncapsulatePacket(struct superman_packet_info* spi)
 		spi->shdr = (struct superman_header*)skb_transport_header(spi->skb);
 		spi->shdr->type = SUPERMAN_MAX_TYPE + spi->iph->protocol;					// We're preparing a superman packet.
 		spi->shdr->timestamp = 0; // htons(GetNextTimestampFromSecurityTableEntry(htonl(spi->e2e_addr)));			// This will be a unique counter value for each packet, cycling round.
-		spi->shdr->payload_len = htons(spi->skb->len - iph_len - SUPERMAN_HEADER_LEN);	// The payload length.	
+		spi->shdr->payload_len = htons(spi->skb->len - iph_len - SUPERMAN_HEADER_LEN);	// The payload length.
 		spi->shdr->last_addr = htonl(0);
 
 		// Update the IP header
@@ -329,7 +329,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 	struct net_device *dev;
 
 	// printk(KERN_INFO "SUPERMAN: Packet - \tSend Discovery Request...\n");
-	
+
 	INTERFACE_ITERATOR_START(dev)
 
 	struct sk_buff* tx_sk;
@@ -369,7 +369,7 @@ void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk)
 
 	//   sk_len
 	// -----------
-	//     sk       
+	//     sk
 	// -----------
 
 	payload = skb_put(tx_sk, sk_len);
@@ -453,7 +453,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 
 	//   sk_len
 	// -----------
-	//     sk     
+	//     sk
 	// -----------
 
 	payload = skb_put(tx_sk, sk_len);
@@ -485,7 +485,7 @@ void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char*
 	send_superman_packet(tx_sk, false);
 	//spi = MallocSupermanPacketInfo(tx_sk, NULL);
 	//send_superman_packet(spi, true);
-	
+
 	// Dereference the device.
 	dev_put(dev);
 	// printk(KERN_INFO "SUPERMAN: Packet - \t... Send Certificate Request done.\n");
@@ -495,7 +495,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 {
 	struct security_table_entry* ste;
 	struct net_device *dev;
-	//struct dst_entry* dst;		
+	//struct dst_entry* dst;
 	struct in_addr;
 	struct sk_buff* tx_sk;
 	struct superman_header* shdr;
@@ -538,7 +538,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 
 	//     2 bytes      | certificate_len
 	// -----------------------------------
-	//  certificate_len |   certificate    
+	//  certificate_len |   certificate
 	// -----------------------------------
 	payload = skb_put(tx_sk, CERTIFICATE_EXCHANGE_PAYLOAD_LEN(certificate_len));
 	{
@@ -580,7 +580,7 @@ void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsi
 	// {
 	// 	skb_dst_set(tx_sk, dst);
 	// 	tx_sk->dev = dst->dev;
-	// 
+	//
 	// 	if(ip_local_out(tx_sk) == NF_DROP)
 	// 		kfree_skb(tx_sk);
 	// }
@@ -602,7 +602,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 {
 	struct security_table_entry* ste;
 	struct net_device *dev;
-	//struct dst_entry* dst;		
+	//struct dst_entry* dst;
 	struct in_addr;
 	struct sk_buff* tx_sk;
 	struct superman_header* shdr;
@@ -646,7 +646,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 
 	//      2 bytes     |     2 bytes       |  certificate_len     | broadcast_key_len
 	// --------------------------------------------------------------------------------
-	//   certificte_len | broadcast_key_len |    certificate       |   broadcast_key       
+	//   certificte_len | broadcast_key_len |    certificate       |   broadcast_key
 	// --------------------------------------------------------------------------------
 	payload = skb_put(tx_sk, CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_PAYLOAD_LEN(certificate_len, broadcast_key_len));
 	{
@@ -656,7 +656,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 		memcpy(p->data, certificate, certificate_len);
 		memcpy(p->data + certificate_len, broadcast_key, broadcast_key_len);
 	}
-	
+
 	// Setup the superman header
 	shdr = (struct superman_header*) skb_push(tx_sk, SUPERMAN_HEADER_LEN);
 	skb_reset_transport_header(tx_sk);
@@ -685,7 +685,7 @@ void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certi
 	// tx_sk->protocol = htons(ETH_P_IP);
 	// tx_sk->sk = NULL;
 	// ip_send_check(iph);
-	// 
+	//
 	// dst = lookup_dst(dev, iph->saddr, iph->daddr);
 	// if(dst)
 	// {
@@ -716,14 +716,14 @@ void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr,
 	struct superman_header* shdr;
 	void* payload;
 	struct rtable* rt;
-	struct dst_entry* dst;		
+	struct dst_entry* dst;
 	uint32_t ouraddr;
 	struct flowi4 fl4;
 
 	// NOTE: Responses are sent from the target to the origin
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSendAuthenticatedSKResponsePacket\n");
-	printk(KERN_INFO "SUPERMAN: Packet - \tDoing ip_route_output_key on addr %d.%d.%d.%d...\n", 0x0ff & originaddr, 0x0ff & (originaddr >> 8), 0x0ff & (originaddr >> 16), 0x0ff & (originaddr >> 24));
+	//printk(KERN_INFO "SUPERMAN: Packet - \tSendAuthenticatedSKResponsePacket\n");
+	//printk(KERN_INFO "SUPERMAN: Packet - \tDoing ip_route_output_key on addr %d.%d.%d.%d...\n", 0x0ff & originaddr, 0x0ff & (originaddr >> 8), 0x0ff & (originaddr >> 16), 0x0ff & (originaddr >> 24));
 
 	memset(&fl4, 0, sizeof(fl4));
 	fl4.daddr = originaddr;
@@ -742,12 +742,12 @@ void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr,
 		return;
 	}
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tDoing inet_select_addr...\n");
+	//printk(KERN_INFO "SUPERMAN: Packet - \tDoing inet_select_addr...\n");
 	ouraddr = inet_select_addr(dst->dev, originaddr, RT_SCOPE_UNIVERSE);
 	if(originaddr == 0)
 		originaddr = ouraddr;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSending SK Response, target: %d.%d.%d.%d, origin %d.%d.%d.%d.\n", 0x0ff & targetaddr, 0x0ff & (targetaddr >> 8), 0x0ff & (targetaddr >> 16), 0x0ff & (targetaddr >> 24), 0x0ff & originaddr, 0x0ff & (originaddr >> 8), 0x0ff & (originaddr >> 16), 0x0ff & (originaddr >> 24));
+	//printk(KERN_INFO "SUPERMAN: Packet - \tSending SK Response, target: %d.%d.%d.%d, origin %d.%d.%d.%d.\n", 0x0ff & targetaddr, 0x0ff & (targetaddr >> 8), 0x0ff & (targetaddr >> 16), 0x0ff & (targetaddr >> 24), 0x0ff & originaddr, 0x0ff & (originaddr >> 8), 0x0ff & (originaddr >> 16), 0x0ff & (originaddr >> 24));
 
 	// Allocate a new packet
 	tx_sk = alloc_skb(sizeof(struct iphdr) + SUPERMAN_HEADER_LEN + SK_RESPONSE_PAYLOAD_LEN(sk_len), GFP_KERNEL);
@@ -756,6 +756,7 @@ void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr,
 		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
 		return;
 	}
+	tx_sk->dev = dst->dev;
 	skb_dst_set(tx_sk, dst);
 	tx_sk->pkt_type = PACKET_OUTGOING;				// Its outgoing.
 	tx_sk->ip_summed = CHECKSUM_NONE;				// No need to checksum.
@@ -766,14 +767,14 @@ void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr,
 
 	// Payload goes here.
 
-	//  4 bytes | 4 bytes  | 2 bytes | sk_len    
+	//  4 bytes | 4 bytes  | 2 bytes | sk_len
 	// -----------------------------------------
-	//   saddr  |  daddr   |  sk_len |  sk   
+	//   saddr  |  daddr   |  sk_len |  sk
 	// -----------------------------------------
 
 	//printk(KERN_INFO "SUPERMAN: Packet - \tReserving %lu bytes...\n", SK_RESPONSE_PAYLOAD_LEN(sk_len));
 	payload = skb_put(tx_sk, SK_RESPONSE_PAYLOAD_LEN(sk_len));
-	{	
+	{
 		struct sk_response_payload* p = (struct sk_response_payload*)payload;
 		p->originaddr = htonl(originaddr);
 		p->targetaddr = htonl(targetaddr);
@@ -813,11 +814,11 @@ void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr,
 	// ip_send_check(iph);
 	//
 	// if(ip_local_out(tx_sk) == NF_DROP)
-	//	kfree_skb(tx_sk);	
+	//	kfree_skb(tx_sk);
 
 	send_superman_packet(tx_sk, true);
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSK Response sent.\n");
+	//printk(KERN_INFO "SUPERMAN: Packet - \tSK Response sent.\n");
 }
 
 void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr)
@@ -827,14 +828,15 @@ void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr)
 	struct superman_header* shdr;
 	void* payload;
 	struct rtable* rt;
-	struct dst_entry* dst;		
+	struct dst_entry* dst;
 	uint32_t ouraddr;
 	struct flowi4 fl4;
 
 	// NOTE: Requests are sent from the origin to the target
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSendAuthenticatedSKRequestPacket\n");
-	printk(KERN_INFO "SUPERMAN: Packet - \tDoing ip_route_output_key on addr %d.%d.%d.%d...\n", 0x0ff & targetaddr, 0x0ff & (targetaddr >> 8), 0x0ff & (targetaddr >> 16), 0x0ff & (targetaddr >> 24));
+	//printk(KERN_INFO "SUPERMAN: Packet - \tSendAuthenticatedSKRequestPacket\n");
+
+	//printk(KERN_INFO "SUPERMAN: Packet - \tDoing ip_route_output_key on addr %d.%d.%d.%d...\n", 0x0ff & targetaddr, 0x0ff & (targetaddr >> 8), 0x0ff & (targetaddr >> 16), 0x0ff & (targetaddr >> 24));
 
 	memset(&fl4, 0, sizeof(fl4));
 	fl4.daddr = targetaddr;
@@ -853,12 +855,12 @@ void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr)
 		return;
 	}
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tDoing inet_select_addr...\n");
+	//printk(KERN_INFO "SUPERMAN: Packet - \tDoing inet_select_addr...\n");
 	ouraddr = inet_select_addr(dst->dev, targetaddr, RT_SCOPE_UNIVERSE);
 	if(originaddr == 0)
 		originaddr = ouraddr;
 
-	printk(KERN_INFO "SUPERMAN: Packet - \tSending SK Request, target: %d.%d.%d.%d, origin: %d.%d.%d.%d.\n", 0x0ff & targetaddr, 0x0ff & (targetaddr >> 8), 0x0ff & (targetaddr >> 16), 0x0ff & (targetaddr >> 24), 0x0ff & originaddr, 0x0ff & (originaddr >> 8), 0x0ff & (originaddr >> 16), 0x0ff & (originaddr >> 24));
+	//printk(KERN_INFO "SUPERMAN: Packet - \tSending SK Request, target: %d.%d.%d.%d, origin: %d.%d.%d.%d.\n", 0x0ff & targetaddr, 0x0ff & (targetaddr >> 8), 0x0ff & (targetaddr >> 16), 0x0ff & (targetaddr >> 24), 0x0ff & originaddr, 0x0ff & (originaddr >> 8), 0x0ff & (originaddr >> 16), 0x0ff & (originaddr >> 24));
 
 	// Allocate a new packet
 	tx_sk = alloc_skb(sizeof(struct iphdr) + SUPERMAN_HEADER_LEN + SK_REQUEST_PAYLOAD_LEN, GFP_KERNEL);
@@ -867,6 +869,7 @@ void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr)
 		printk(KERN_INFO "SUPERMAN: Packet - \t\tFailed to allocate a new skb.");
 		return;
 	}
+	tx_sk->dev = dst->dev;
 	skb_dst_set(tx_sk, dst);
 	tx_sk->pkt_type = PACKET_OUTGOING;				// Its outgoing.
 	tx_sk->ip_summed = CHECKSUM_NONE;				// No need to checksum.
@@ -920,11 +923,14 @@ void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr)
 	// ip_send_check(iph);
 	//
 	// if(ip_local_out(tx_sk) == NF_DROP)
-	//	kfree_skb(tx_sk);	
+	//	kfree_skb(tx_sk);
+
+	// Update the security table to log the fact that we've made this request.
+	UpdateSecurityTableEntryFlag(targetaddr, SUPERMAN_SECURITYTABLE_FLAG_SEC_REQUESTED, -1, rt->rt_iif);
 
 	send_superman_packet(tx_sk, true);
 
-	printk(KERN_INFO "SUPERMAN: Packet - \t SK Request sent.\n");
+	//printk(KERN_INFO "SUPERMAN: Packet - \t SK Request sent.\n");
 }
 
 void SendSKInvalidatePacket(uint32_t addr)
@@ -935,7 +941,7 @@ void SendSKInvalidatePacket(uint32_t addr)
 
 	struct in_addr;
 	struct sk_buff* tx_sk;
-	//struct dst_entry* dst;		
+	//struct dst_entry* dst;
 	struct superman_header* shdr;
 	struct iphdr* iph;
 	void* payload;
@@ -1004,7 +1010,7 @@ void SendSKInvalidatePacket(uint32_t addr)
 	// tx_sk->protocol = htons(ETH_P_IP);
 	// tx_sk->sk = NULL;
 	// ip_send_check(iph);
-	// 
+	//
 	// dst = lookup_dst(dev, iph->saddr, iph->daddr);
 	// if(dst)
 	// {
@@ -1036,7 +1042,7 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 
 	struct in_addr;
 	struct sk_buff* tx_sk;
-	//struct dst_entry* dst;		
+	//struct dst_entry* dst;
 	struct superman_header* shdr;
 	struct iphdr* iph;
 	void* payload;
@@ -1107,7 +1113,7 @@ void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadca
 	// tx_sk->protocol = htons(ETH_P_IP);
 	// tx_sk->sk = NULL;
 	// ip_send_check(iph);
-	// 
+	//
 	// dst = lookup_dst(dev, iph->saddr, iph->daddr);
 	// if(dst)
 	// {

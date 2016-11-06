@@ -29,8 +29,12 @@ struct superman_packet_info
 
 	// Information provided by the hook function where the SPI originated.
 	struct sk_buff *skb;
-	const struct nf_hook_state *state;
-
+	//const struct nf_hook_state *state;
+	unsigned int hook;
+	int (*okfn)(struct net *, struct sock *, struct sk_buff *);
+	struct sock *sk;
+	struct net *net;
+	
 	// Useful pointers to the relevant parts of the packet.
 	struct superman_header* shdr;
 	struct iphdr* iph;
@@ -65,11 +69,12 @@ struct superman_packet_info
 	// Temporary storage locations for use by any phase of the process as appropriate.
 	void* arg;
 	void* tmp;
+	uint8_t ttl; // Cached as this changes in transit so needs to be ignored by SUPERMAN.
 
 	// Queue support
 	__be32 queue_addr;
 	struct timeval queue_entry_time;
-	
+
 
 	// Temporary spi identifier
 	uint32_t id;
@@ -77,6 +82,7 @@ struct superman_packet_info
 
 //uint16_t GetNextTimestampFromSupermanPacketInfo(struct superman_packet_info* spi);
 struct superman_packet_info* MallocSupermanPacketInfo(struct sk_buff *skb, const struct nf_hook_state *state);
+void RefreshSupermanPacketInfo(struct superman_packet_info* spi);
 unsigned int FreeSupermanPacketInfo(struct superman_packet_info* spi);
 
 #endif

@@ -14,6 +14,8 @@ int EnqueuePacket(struct superman_packet_info* spi, __be32 addr, unsigned int (*
 int SetVerdict(int verdict, __u32 daddr);
 void FlushQueue(void);
 
+//bool EnqueueSKRequest(uint32_t originaddr, uint32_t targetaddr);
+
 bool InitQueue(void);
 void DeInitQueue(void);
 

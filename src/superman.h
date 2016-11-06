@@ -21,6 +21,10 @@
 #include <stdint.h>
 #include <string.h>
 
+extern FILE* log_file;
+extern bool use_logfile;
+void lprintf(const char* fmt, ...);
+
 #endif
 
 #define SUPERMAN_VERSION_MAJOR 1

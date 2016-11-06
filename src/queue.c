@@ -29,6 +29,53 @@
 #define QUEUE_QMAX_DEFAULT 1024
 #define NET_QUEUE_QMAX 2088
 #define NET_QUEUE_QMAX_NAME "queue_maxlen"
+//#define WORKQUEUE_NAME "superman_workqueue"
+
+//static struct workqueue_struct *workqueue;
+/*
+typedef struct {
+  struct work_struct item;
+  uint32_t originaddr;
+	uint32_t targetaddr;
+} send_sk_request_item;
+
+static void send_sk_request_callback(struct work_struct* work)
+{
+	send_sk_request_item* item = (send_sk_request_item*)work;
+	SendAuthenticatedSKRequestPacket(item->originaddr, item->targetaddr);
+	kfree(item);
+}
+*/
+
+/*
+typedef struct {
+  struct work_struct		item;
+  struct superman_packet_info*	spi;
+	bool result;
+} send_queued_packet_item;
+
+static void send_queued_packet_callback(struct work_struct* work)
+{
+	unsigned int (*callback_after_queue)(struct superman_packet_info*, bool);
+	send_queued_packet_item* item = (send_queued_packet_item*)work;
+	struct superman_packet_info* spi = item->spi;
+
+    // Grab the callback function from the spi->arg and reset the arg.
+	callback_after_queue = (unsigned int (*)(struct superman_packet_info*, bool)) spi->arg;
+	spi->arg = NULL;
+
+    // Free our work_struct.
+	kfree(item);
+
+    //printk(KERN_INFO "SUPERMAN: queue: \tDequeued superman_packet_info (id: %u)...\n", spi->id);
+
+    // Refresh our spi to get the security details which we should now have.
+    RefreshSupermanPacketInfo(spi);
+
+    // Call the callback to reinject the packet into the processing pipeline where it left off.
+	callback_after_queue(spi, item->result);
+}
+*/
 
 static unsigned int queue_maxlen = QUEUE_QMAX_DEFAULT;
 static rwlock_t queue_lock = __RW_LOCK_UNLOCKED(queue_lock);
@@ -172,6 +219,9 @@ int SetVerdict(int verdict, __be32 addr)
 	{
 		struct security_table_entry* entry;
 		unsigned int (*callback_after_queue)(struct superman_packet_info*, bool);
+		bool r = false;
+		if (GetSecurityTableEntry(addr, &entry) && entry->flag == SUPERMAN_SECURITYTABLE_FLAG_SEC_VERIFIED)
+			r = true;
 
 		while (1) {
 			spi = queue_find_dequeue_entry(addr_cmp, addr);
@@ -179,13 +229,42 @@ int SetVerdict(int verdict, __be32 addr)
 			if (spi == NULL)
 				return pkts;
 
-			callback_after_queue = (unsigned int (*)(struct superman_packet_info*, bool)) spi->arg;
-			spi->arg = NULL;
+				/*
+				typedef struct {
+				  struct work_struct		item;
+				  struct superman_packet_info*	spi;
+					bool result;
+				} send_queued_packet_item;
+				*/
 
-			if (GetSecurityTableEntry(addr, &entry))
-				callback_after_queue(spi, true);
-			else
-				callback_after_queue(spi, false);
+			{
+                /*
+				send_queued_packet_item* item = (send_queued_packet_item*)kmalloc(sizeof(send_queued_packet_item), GFP_KERNEL);
+				if(!item)
+				{
+					printk(KERN_ERR "SUPERMAN: Queue - kmalloc failed.\n");
+					return false;
+				}
+
+				INIT_WORK((struct work_struct*)item, send_queued_packet_callback);
+				item->spi = spi;
+				item->result = r;
+				//queue_work(workqueue, (struct work_struct *)item);
+				schedule_work((struct work_struct *)item);
+                */
+
+                // Grab the callback function from the spi->arg and reset the arg.
+            	callback_after_queue = (unsigned int (*)(struct superman_packet_info*, bool)) spi->arg;
+            	spi->arg = NULL;
+
+                //printk(KERN_INFO "SUPERMAN: queue: \tDequeued superman_packet_info (id: %u)...\n", spi->id);
+
+                // Refresh our spi to get the security details which we should now have.
+                RefreshSupermanPacketInfo(spi);
+
+                // Call the callback to reinject the packet into the processing pipeline where it left off.
+            	callback_after_queue(spi, r);
+			}
 
 			pkts++;
 		}
@@ -207,7 +286,7 @@ int queue_info_proc_show(struct seq_file *m, void *v)
 	list_for_each(a, &queue_list) {
 		struct superman_packet_info *spi = (struct superman_packet_info*)a;
 		bool found = false;
-		
+
 		for(i = 0; i < countAddrs; i++)
 		{
 			if(spi->queue_addr == addrs[i])
@@ -245,19 +324,44 @@ int queue_info_proc_show(struct seq_file *m, void *v)
 
 	read_unlock_bh(&queue_lock);
 
-   
 	return 0;
 }
+
+/*
+bool EnqueueSKRequest(uint32_t originaddr, uint32_t targetaddr)
+{
+	send_sk_request_item* item = (send_sk_request_item*)kmalloc(sizeof(send_sk_request_item), GFP_KERNEL);
+	if(!item)
+	{
+		printk(KERN_ERR "SUPERMAN: Queue - EnqueueSKRequest kmalloc failed.\n");
+		return false;
+	}
+
+	INIT_WORK((struct work_struct *)item, send_sk_request_callback);
+	item->originaddr = originaddr;
+	item->targetaddr = targetaddr;
+	//queue_work(workqueue, (struct work_struct *)item);
+	schedule_work((struct work_struct *)item);
+	return true;
+}
+*/
 
 bool InitQueue(void)
 {
 	queue_total = 0;
-	return true;	
+
+	//workqueue = create_workqueue(WORKQUEUE_NAME);
+
+	return true;
 }
 
 void DeInitQueue(void)
 {
 	FlushQueue();
+
+	flush_scheduled_work();
+	//flush_workqueue(workqueue);
+	//destroy_workqueue(workqueue);
 }
 
 #endif

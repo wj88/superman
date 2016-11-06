@@ -31,6 +31,8 @@ void DeInitSecurity(void);
 
 #else
 
+void DumpKeys(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp);
+
 bool MallocAndCopyPublickey(uint32_t* sk_len, unsigned char** sk);
 bool MallocAndCopyCertificate(uint32_t* certificate_len, unsigned char** certificate);
 bool MallocAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* ske_len, unsigned char** ske, uint32_t* skp_len, unsigned char** skp);

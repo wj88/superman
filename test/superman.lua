@@ -10,7 +10,8 @@ local superman_hdr_fields = {
 	-- Other fields
 	public_key = ProtoField.bytes("superman.public_key", "Public Key", base.HEX),
 	encrypted_data = ProtoField.bytes("superman.encrypted_data", "Encrypted Data", base.HEX),
-	hmac = ProtoField.bytes("superman.hmac", "HMAC", base.HEX)
+	e2e_hmac = ProtoField.bytes("superman.e2ehmac", "E2E HMAC", base.HEX),
+	p2p_hmac = ProtoField.bytes("superman.p2phmac", "P2P HMAC", base.HEX)
 
 	-- Fields we cannot use because they're data is encrypted.
 	--certificate_len = ProtoField.uint16("superman.certificate_len", "Certificate Len", base.DESC),
@@ -95,9 +96,11 @@ function superman_proto.dissector(tvbuf, pktinfo, root)
 	end
 
 	if tvbuf:len() > offset then
-		local hmac_len = tvbuf:len() - offset
-		subtree:add(superman_hdr_fields.hmac, tvbuf:range(offset, hmac_len)):append_text(" ("..hmac_len.." bytes)")
-		offset = offset + hmac_len
+		subtree:add(superman_hdr_fields.e2e_hmac, tvbuf:range(offset, 4))
+		subtree:add(superman_hdr_fields.p2p_hmac, tvbuf:range(offset + 4, 4))
+	--	local hmac_len = tvbuf:len() - offset
+	--	subtree:add(superman_hdr_fields.hmac, tvbuf:range(offset, hmac_len)):append_text(" ("..hmac_len.." bytes)")
+	--	offset = offset + hmac_len
 	end
 
 end

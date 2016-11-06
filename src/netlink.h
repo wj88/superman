@@ -35,4 +35,3 @@ bool InitNetlink(void);
 void DeInitNetlink(void);
 
 #endif
-

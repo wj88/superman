@@ -194,7 +194,7 @@ enum {
 	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SK,
 	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKE,
 	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_SKP,
-	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_OVERWRITE,	
+	K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_OVERWRITE,
 	__K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_LAST,
 };
 #define K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_MIN (__K_UPDATE_SUPERMAN_BROADCAST_KEY_ATTR_FIRST + 1)
@@ -254,7 +254,7 @@ static struct nla_policy k_send_superman_certificate_request_genl_policy[K_SEND_
 enum {
 	__K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_FIRST = 0,
 	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS,
-	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_SK,
+//	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_SK,
 	K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE,
 	__K_SEND_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_LAST,
 };
@@ -532,7 +532,7 @@ static const struct genl_multicast_group superman_mc_groups[] = {
 #define GENL_FREE(VAR)					\
 	if(VAR != NULL)					\
 		kfree(VAR);
-		
+
 
 int k_update_superman_interface_table_entry(struct sk_buff *skb_msg, struct genl_info *info)
 {
@@ -553,7 +553,6 @@ int k_update_superman_interface_table_entry(struct sk_buff *skb_msg, struct genl
 
 int k_update_superman_security_table_entry(struct sk_buff *skb_msg, struct genl_info *info)
 {
-
 	uint32_t	address;
 	uint8_t		flag;
 	uint32_t	sk_len;
@@ -754,11 +753,11 @@ int d_received_superman_broadcast_key_exchange(struct sk_buff *skb_msg, struct g
 
 #define GENL_PARSE(ATTR_MAX, POLICY) \
 	struct nlattr *attrs[ATTR_MAX + 1];										\
-	/*printf("Netlink: Received netlink (%s)...\n", superman_msg_type_to_str(genlmsg_hdr(nlh)->cmd)); */	\
-	/* printf("Netlink: \tParsing generic netlink message...\n"); */						\
+	/*lprintf("Netlink: Received netlink (%s)...\n", superman_msg_type_to_str(genlmsg_hdr(nlh)->cmd)); */	\
+	/* lprintf("Netlink: \tParsing generic netlink message...\n"); */						\
 	if(genlmsg_parse(nlh, 0, attrs, ATTR_MAX, POLICY) < 0)								\
 	{														\
-		printf("Netlink: \tFailed to parse netlink message\n");							\
+		lprintf("Netlink: \tFailed to parse netlink message\n");							\
 		return NL_SKIP;												\
 	}
 
@@ -932,18 +931,18 @@ int d_superman_messaging_callback(struct nl_msg* msg, void* arg)
 	nlh = nlmsg_hdr(msg);
 	if(!nlh)
 	{
-		printf("Netlink: Failed to get the Netlink message header\n");
+		lprintf("Netlink: Failed to get the Netlink message header\n");
 		return NL_SKIP;
 	}
 
 	genlh = genlmsg_hdr(nlh);
 	if(!genlh)
 	{
-		printf("Netlink: Failed to get the Generic Netlink message header\n");
+		lprintf("Netlink: Failed to get the Generic Netlink message header\n");
 		return NL_SKIP;
 	}
 
-	// printf("Netlink: Received message \"%s\".\n", superman_msg_type_to_str(genlh->cmd));
+	// lprintf("Netlink: Received message \"%s\".\n", superman_msg_type_to_str(genlh->cmd));
 
 	switch(genlh->cmd)
 	{
@@ -984,7 +983,7 @@ bool CheckForMessages(void)
 		rc = nl_recvmsgs_default(nlsk);
 		if(rc != -NLE_AGAIN && rc < 0)
 		{
-			printf("Netlink: nl_recvmsgs_default failed, rc %d\n", rc);
+			lprintf("Netlink: nl_recvmsgs_default failed, rc %d\n", rc);
 			DeInitNetlink();
 		}
 		return hadMessages;
@@ -1039,8 +1038,8 @@ static struct genl_ops superman_ops[SUPERMAN_MAX] = {
 	struct nl_msg *msg;											\
 	int fail = 0;												\
 														\
-	/* printf("Netlink: Starting netlink (%s)...\n", superman_msg_type_to_str(K_SUPERMAN_OPERATION)); */	\
-	/* printf("Netlink: Constructing the netlink message...\n"); */						\
+	/* lprintf("Netlink: Starting netlink (%s)...\n", superman_msg_type_to_str(K_SUPERMAN_OPERATION)); */	\
+	/* lprintf("Netlink: Constructing the netlink message...\n"); */						\
 														\
 	/* Construct a new message */										\
 	msg = nlmsg_alloc();											\
@@ -1048,21 +1047,21 @@ static struct genl_ops superman_ops[SUPERMAN_MAX] = {
 	/* Add the Generic Netlink header to the netlink message. */						\
 	genlmsg_put(msg, NL_AUTO_PID, NL_AUTO_SEQ, superman_family_id, 0, 0, K_SUPERMAN_OPERATION, 0);		\
 														\
-	/* printf("Netlink: Adding the attributes to the message...\n"); */
+	/* lprintf("Netlink: Adding the attributes to the message...\n"); */
 
 #define D_GENL_FINISH \
 	if(fail == 0) {												\
-		/* printf("Netlink: Sending the netlink message...\n"); */					\
+		/* lprintf("Netlink: Sending the netlink message...\n"); */					\
 		/* Send the message over the netlink socket */							\
 		nl_send_auto(nlsk, msg);									\
 	}													\
 	else {													\
-		printf("Netlink: Failed to add the attributes to the message.\n");				\
+		lprintf("Netlink: Failed to add the attributes to the message.\n");				\
 	}													\
 														\
 	/* Cleanup */												\
 	nlmsg_free(msg);											\
-	/* printf("Netlink: Finished netlink.\n"); */
+	/* lprintf("Netlink: Finished netlink.\n"); */
 
 #define D_GENL_CALC_NLA_SIZE(contents) nlmsg_alloc()
 
@@ -1116,7 +1115,7 @@ void SendSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned 
 {
 	D_GENL_START(K_SEND_SUPERMAN_CERTIFICATE_REQUEST)
 	if(	nla_put_u32	(msg,	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,							address		) ||
-		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,					sk_len,			sk		))
+		nla_put		(msg,	K_SEND_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,				sk_len,			sk		))
 		fail = 1;
 	D_GENL_FINISH
 }
@@ -1203,7 +1202,7 @@ void SendSupermanSKInvalidate(uint32_t address)
 		fail = genlmsg_multicast(&superman_genl_family, skb, 0, K_SUPERMAN_MC_GROUP, GFP_ATOMIC);		\
 															\
 		/*	If error - fail.
-			ESRCH is "forever alone" case - no one is listening for our messages 
+			ESRCH is "forever alone" case - no one is listening for our messages
 			and it's ok, since userspace daemon can be unloaded.
 		*/													\
 		if(fail && fail != -ESRCH)										\
@@ -1213,13 +1212,13 @@ void SendSupermanSKInvalidate(uint32_t address)
 		}													\
 	}														\
 	/* printk(KERN_INFO "SUPERMAN: Netlink - Finised netlink.\n"); */
-	
+
 void ReceivedSupermanDiscoveryRequest(uint32_t address, uint32_t sk_len, unsigned char* sk, int32_t timestamp, int32_t ifindex)
 {
 	K_GENL_START(D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST)
-	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS,							address		) ||
-		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,					sk_len,			sk		) ||
-		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_TIMESTAMP,				sizeof(int32_t),	&timestamp	) ||
+	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_ADDRESS,									address		) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_SK,					sk_len,				sk			) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_TIMESTAMP,			sizeof(int32_t),	&timestamp	) ||
 		nla_put		(skb,	D_RECEIVED_SUPERMAN_DISCOVERY_REQUEST_ATTR_IFINDEX,				sizeof(int32_t),	&ifindex	))
 		fail = 1;
 	K_GENL_FINISH
@@ -1228,10 +1227,10 @@ void ReceivedSupermanDiscoveryRequest(uint32_t address, uint32_t sk_len, unsigne
 void ReceivedSupermanCertificateRequest(uint32_t address, uint32_t sk_len, unsigned char* sk, int32_t timestamp, int32_t ifindex)
 {
 	K_GENL_START(D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST)
-	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,							address		) ||
-		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,				sk_len,			sk		) ||
-		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_TIMESTAMP,				sizeof(int32_t),	&timestamp	) ||
-		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_IFINDEX,				sizeof(int32_t),	&ifindex	))
+	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_ADDRESS,								address		) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_SK,				sk_len,				sk			) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_TIMESTAMP,			sizeof(int32_t),	&timestamp	) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_REQUEST_ATTR_IFINDEX,			sizeof(int32_t),	&ifindex	))
 		fail = 1;
 	K_GENL_FINISH
 }
@@ -1242,8 +1241,8 @@ void ReceivedSupermanCertificateExchange(uint32_t address, uint32_t certificate_
 	if(GetSecurityTableEntry(address, &e))
 	{
 		K_GENL_START(D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE)
-		if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS,							address		) ||
-			nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_SK,				e->sk_len,		e->sk		) ||
+		if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_ADDRESS,									address		) ||
+			nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_SK,					e->sk_len,			e->sk		) ||
 			nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_ATTR_CERTIFICATE,			certificate_len,	certificate	))
 			fail = 1;
 		K_GENL_FINISH
@@ -1256,9 +1255,9 @@ void ReceivedSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint3
 	if(GetSecurityTableEntry(address, &e))
 	{
 		K_GENL_START(D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY)
-		if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS,				address		) ||
-			nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_SK,		e->sk_len,		e->sk		) ||
-			nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,	certificate_len,	certificate	) ||
+		if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_ADDRESS,							address			) ||
+			nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_SK,			e->sk_len,			e->sk			) ||
+			nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_CERTIFICATE,	certificate_len,	certificate		) ||
 			nla_put		(skb,	D_RECEIVED_SUPERMAN_CERTIFICATE_EXCHANGE_WITH_BROADCAST_KEY_ATTR_BROADCAST_KEY,	broadcast_key_len,	broadcast_key	))
 			fail = 1;
 		K_GENL_FINISH
@@ -1268,9 +1267,9 @@ void ReceivedSupermanCertificateExchangeWithBroadcastKey(uint32_t address, uint3
 void ReceivedSupermanAuthenticatedSKResponse(uint32_t address, uint32_t sk_len, unsigned char* sk, int32_t timestamp, int32_t ifindex)
 {
 	K_GENL_START(D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE)
-	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_ADDRESS,						address		) ||
-		nla_put		(skb,	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_SK,				sk_len,			sk		) ||
-		nla_put		(skb,	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_TIMESTAMP,			sizeof(int32_t),	&timestamp	) ||
+	if(	nla_put_u32	(skb,	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_ADDRESS,								address		) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_SK,				sk_len,				sk			) ||
+		nla_put		(skb,	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_TIMESTAMP,		sizeof(int32_t),	&timestamp	) ||
 		nla_put		(skb,	D_RECEIVED_SUPERMAN_AUTHENTICATED_SK_RESPONSE_ATTR_IFINDEX,			sizeof(int32_t),	&ifindex	))
 		fail = 1;
 	K_GENL_FINISH
@@ -1304,7 +1303,7 @@ bool InitNetlink(void)
 	// Allocate a new socket
 	nlsk = nl_socket_alloc();
 	if(!nlsk) {
-		printf("Netlink: nl_socket_alloc failed\n" );
+		lprintf("Netlink: nl_socket_alloc failed\n" );
 		return false;
 	}
 
@@ -1315,7 +1314,7 @@ bool InitNetlink(void)
 	rc = nl_socket_modify_cb(nlsk, NL_CB_VALID, NL_CB_CUSTOM, d_superman_messaging_callback, NULL);
 	if(rc < 0)
 	{
-		printf("Netlink: nl_cb_set failed, rc %d\n", rc);
+		lprintf("Netlink: nl_cb_set failed, rc %d\n", rc);
 		DeInitNetlink();
 		return false;
 	}
@@ -1324,7 +1323,7 @@ bool InitNetlink(void)
 	rc = genl_connect(nlsk);
 	if(rc < 0)
 	{
-		printf("Netlink: genl_connect failed, rc %d\n", rc);
+		lprintf("Netlink: genl_connect failed, rc %d\n", rc);
 		DeInitNetlink();
 		return false;
 	}
@@ -1333,7 +1332,7 @@ bool InitNetlink(void)
 	rc = nl_socket_set_nonblocking(nlsk);
 	if(rc < 0)
 	{
-		printf("Netlink: nl_socket_set_nonblocking failed, rc %d\n", rc);
+		lprintf("Netlink: nl_socket_set_nonblocking failed, rc %d\n", rc);
 		DeInitNetlink();
 		return false;
 	}
@@ -1342,7 +1341,7 @@ bool InitNetlink(void)
 	rc = genl_ctrl_alloc_cache(nlsk, &genl_cache);
 	if(rc < 0)
 	{
-		printf("Netlink: genl_ctrl_alloc_cache failed, rc %d\n", rc);
+		lprintf("Netlink: genl_ctrl_alloc_cache failed, rc %d\n", rc);
 		DeInitNetlink();
 		return false;
 	}
@@ -1351,17 +1350,17 @@ bool InitNetlink(void)
 	superman_family_id = genl_ctrl_resolve(nlsk, K_SUPERMAN_FAMILY_NAME);
 	if(superman_family_id < 0)
 	{
-		printf("Netlink: No SUPERMAN netlink family found. Is the SUPERMAN kernel module loaded?\n");
+		lprintf("Netlink: No SUPERMAN netlink family found. Is the SUPERMAN kernel module loaded?\n");
 		DeInitNetlink();
 		return false;
 	}
 
-	
-	// Resolve keymon muilticast group 
+
+	// Resolve keymon muilticast group
 	superman_mc_group_id = genl_ctrl_resolve_grp(nlsk, K_SUPERMAN_FAMILY_NAME, K_SUPERMAN_MC_GROUP_NAME);
 	if(superman_mc_group_id < 0)
 	{
-		printf("Netlink: Unabled to resolve the netlink group. Check to see if the kernel module is running, rc %d\n", superman_mc_group_id);
+		lprintf("Netlink: Unabled to resolve the netlink group. Check to see if the kernel module is running, rc %d\n", superman_mc_group_id);
 		DeInitNetlink();
 		return false;
 	}
@@ -1370,7 +1369,7 @@ bool InitNetlink(void)
 	rc = nl_socket_add_memberships(nlsk, superman_mc_group_id, 0);
 	if (rc < 0)
 	{
-		printf("Netlink: nl_socket_add_membership failed, rc %d\n", rc);
+		lprintf("Netlink: nl_socket_add_membership failed, rc %d\n", rc);
 		superman_mc_group_id = -1;
 		DeInitNetlink();
 		return false;
@@ -1385,7 +1384,7 @@ void DeInitNetlink(void)
 #ifdef __KERNEL__
 	genl_unregister_family(&superman_genl_family);
 #else
-	// printf("Netlink: Unloading...\n");
+	// lprintf("Netlink: Unloading...\n");
 	superman_mc_group_id = -1;
 
 	if(genl_cache)
@@ -1401,4 +1400,3 @@ void DeInitNetlink(void)
 	}
 #endif
 }
-

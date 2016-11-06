@@ -108,7 +108,7 @@ bool RemoveSecurityTableEntry(uint32_t daddr)
 		write_unlock_bh(&security_table_lock);
 		return true;
 	}
-	
+
 	write_unlock_bh(&security_table_lock);
 	return false;
 }
@@ -126,6 +126,8 @@ bool GetSecurityTableEntry(uint32_t daddr, struct security_table_entry** entry)
 {
 	if(!entry) return false;
 
+	//printk(KERN_INFO "SUPERMAN: Security_Table - GetSecurityTableEntry - %u.%u.%u.%u\n", 0x0ff & daddr, 0x0ff & (daddr >> 8), 0x0ff & (daddr >> 16), 0x0ff & (daddr >> 24));
+
 	read_lock_bh(&security_table_lock);
 	*entry = __security_table_find(daddr);
 	read_unlock_bh(&security_table_lock);
@@ -134,6 +136,26 @@ bool GetSecurityTableEntry(uint32_t daddr, struct security_table_entry** entry)
 		return true;
 	}
 
+	//printk(KERN_INFO "SUPERMAN: Security_Table - GetSecurityTableEntry - no entry, creating...");
+
+	// If the entry doesn't exist, add it.
+	if(!AddSecurityTableEntry(daddr, SUPERMAN_SECURITYTABLE_FLAG_SEC_NONE, 0, NULL, 0, NULL, 0, NULL, -1, -1)) {
+		return false;
+	}
+	else {
+			read_lock_bh(&security_table_lock);
+			*entry = __security_table_find(daddr);
+			read_unlock_bh(&security_table_lock);
+	}
+
+	//printk(KERN_INFO "SUPERMAN: Security_Table - GetSecurityTableEntry - take 2...");
+
+	if (*entry) {
+		//printk(KERN_INFO "SUPERMAN: Security_Table - GetSecurityTableEntry - success!");
+		return true;
+	}
+
+	//printk(KERN_INFO "SUPERMAN: Security_Table - GetSecurityTableEntry - failure!");
 	return false;
 }
 
@@ -146,15 +168,10 @@ bool UpdateSecurityTableEntry(struct security_table_entry *e, uint32_t daddr, ui
 
 	e->daddr = daddr;
 	e->flag = flag;
-	if(timestamp == -1)
-	{
-		// printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - not updating timestamp or ifindex.");
-	}
-	else
-	{
+	if(timestamp != -1)
 		e->timestamp = timestamp;
+	if(ifindex != -1)
 		e->ifindex = ifindex;
-	}
 
 	// printk(KERN_INFO "Security_Table:\tUpdateSecurityTableEntry - sk_len: %d, ske_len: %d, skp_len: %d\n", sk_len, ske_len, skp_len);
 	if(
@@ -199,10 +216,73 @@ void ClearSecurityTableEntry(struct security_table_entry *e)
 	}
 }
 
-bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
+bool UpdateSecurityTableEntryFlag(uint32_t daddr, uint8_t flag, uint32_t timestamp, uint32_t ifindex)
+{
+	struct security_table_entry *e;
+
+	if(GetSecurityTableEntry(daddr, &e))
+	{
+		e->flag = flag;
+		return true;
+	}
+	else
+	{
+		return UpdateOrAddSecurityTableEntry(daddr, flag, 0, NULL, 0, NULL, 0, NULL, timestamp, ifindex);
+	}
+}
+
+bool AddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
 {
 	struct security_table_entry *e;
 	bool r = false;
+	// printk(KERN_INFO "Security_Table:\tAddSecurityTableEntry - creating new entry.\n");
+
+	// printk(KERN_ERR "SUPERMAN: security_table - \t\tCreating a new entry...\n");
+	e = kmalloc(sizeof(struct security_table_entry), GFP_ATOMIC);
+	if (e == NULL) {
+		printk(KERN_ERR "security_table: \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
+		return false;
+	}
+	e->daddr = 0;
+	e->flag = SUPERMAN_SECURITYTABLE_FLAG_SEC_NONE;
+	e->sk_len = 0;
+	e->sk = NULL;
+	e->ske_len = 0;
+	e->ske = NULL;
+	e->skp_len = 0;
+	e->skp = NULL;
+	e->timestamp = 0;
+	e->ifindex = 0;
+
+	if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
+	{
+		RemoveSecurityTableEntry(daddr);
+		printk(KERN_ERR "SUPERMAN: security_table - \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
+		return false;
+	}
+
+	// printk(KERN_INFO "Security_Table:\tAddSecurityTableEntry - adding entry to the table.\n");
+	write_lock_bh(&security_table_lock);
+	r = __security_table_add(e);
+	if(r)
+		security_table_len++;
+	write_unlock_bh(&security_table_lock);
+
+	if(!r)
+	{
+		printk(KERN_INFO "Security_Table:\tAddSecurityTableEntry - failed, cleaning up.\n");
+		ClearSecurityTableEntry(e);
+		kfree(e);
+	}
+
+	return r;
+}
+
+bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
+{
+	struct security_table_entry *e;
+
+	//printk(KERN_INFO "SUPERMAN: Security_Table - UpdateOrAddSecurityTableEntry - %u.%u.%u.%u, flag = %d.\n", 0x0ff & daddr, 0x0ff & (daddr >> 8), 0x0ff & (daddr >> 16), 0x0ff & (daddr >> 24), flag);
 
 	if(GetSecurityTableEntry(daddr, &e))
 	{
@@ -223,47 +303,7 @@ bool UpdateOrAddSecurityTableEntry(uint32_t daddr, uint8_t flag, uint32_t sk_len
 	}
 	else
 	{
-		// printk(KERN_INFO "Security_Table:\tUpdateOrAddSecurityTableEntry - creating new entry.\n");
-
-		// printk(KERN_ERR "SUPERMAN: security_table - \t\tCreating a new entry...\n");
-		e = kmalloc(sizeof(struct security_table_entry), GFP_ATOMIC);
-		if (e == NULL) {
-			printk(KERN_ERR "security_table: \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
-			return false;
-		}
-		e->daddr = 0;
-		e->flag = 0;
-		e->sk_len = 0;
-		e->sk = NULL;
-		e->ske_len = 0;
-		e->ske = NULL;
-		e->skp_len = 0;
-		e->skp = NULL;
-		e->timestamp = 0;
-		e->ifindex = 0;
-
-		if(!UpdateSecurityTableEntry(e, daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex))
-		{
-			RemoveSecurityTableEntry(daddr);
-			printk(KERN_ERR "SUPERMAN: security_table - \t\t\t\"Out Of Memory\" in UpdateOrAddSecurityTableEntry\n");
-			return false;
-		}
-
-		// printk(KERN_INFO "Security_Table:\tUpdateOrAddSecurityTableEntry - adding entry to the table.\n");
-		write_lock_bh(&security_table_lock);
-		r = __security_table_add(e);
-		if(r)
-			security_table_len++;
-		write_unlock_bh(&security_table_lock);
-
-		if(!r)
-		{
-			printk(KERN_INFO "Security_Table:\tUpdateOrAddSecurityTableEntry - failed, cleaning up.\n");
-			ClearSecurityTableEntry(e);
-			kfree(e);
-		}
-
-		return r;
+		return AddSecurityTableEntry(daddr, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex);
 	}
 }
 
