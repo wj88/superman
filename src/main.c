@@ -24,17 +24,28 @@ struct option longopts[] = {
 	{ "node_cert",	required_argument,	NULL,	'n' },
 	{ "dh_privkey",	required_argument,	NULL,	'p' },
 	{ "test_cert",	required_argument,	NULL,	't' },
-	{ "log_file",	required_argument,		NULL,	'l' },
+	{ "log_file",	required_argument,	NULL,	'l' },
 	{ "debug",	no_argument,		NULL,	'D' },
-	{ "daemon",	no_argument,		NULL,	'd' },
+	{ "mode",	required_argument,	NULL,	'm' },
+	{ "if", 	required_argument, 	NULL,	'i' },
+	{ "if_state",	required_argument,	NULL,	's' },
+	{ "disc_freq",	required_argument,	NULL, 	'f' },
 	{ "version",	no_argument,		NULL,	'V' },
 	{ "help",	no_argument,		NULL,	'h' },
 	{ 0,		0,			0,	0   }
 };
 
+enum mode_states {
+	mode_none,
+	mode_daemon,
+	mode_if,
+	mode_test_cert
+};
+unsigned int mode = mode_none;
+
 bool debug = false;
-bool is_daemon = false;
 bool keep_going = true;
+long update_freq = 3000;
 time_t last_discovery_request;
 
 char* ca_cert_filename = "/etc/superman/ca_certificate.pem";
@@ -45,6 +56,14 @@ char* test_cert_filename = "";
 char* log_filename = "/var/log/supermand.log";
 bool use_logfile = false;
 FILE* log_file = NULL;
+
+enum if_states {
+	if_state_unknown,
+	if_state_up,
+	if_state_down
+};
+char* if_name = "";
+unsigned int if_state = if_state_unknown;
 
 void lprintf(const char* fmt, ...)
 {
@@ -91,24 +110,38 @@ void usage(int status, char* progname)
 
     printf
 	("\nUsage: %s [-DdV?]\n\n"
-	 "-c, --ca_cert file	Location of the CA public certificate\n"
-	 "-n, --node_cert file	Location of this nodes public certificate\n"
-	 "-p, --dh_privkey file	Location of the DH private key file\n"
-	 "-l, --logfile		Location of the log file\n"
-	 "-t, --test_cert		Location of a certificate to check against\n"
-	 "-D, --Debug		Debug mode\n"
-	 "-d, --daemon		Daemon mode, i.e. detach from the console\n"
-	 "-V, --version		Show version\n"
-	 "-?, --help		Show help\n\n"
+	 "-m, --mode [mode]          Set the mode to either:\n"
+	 "           [daemon]        daemon mode, i.e. detach from the console\n"
+	 "           [if]            if mode, to enable or disable an interface\n"
+	 "           [test_cert]     test_cert mode, to test a certificate\n"
+	 "-c, --ca_cert [file]       Location of the CA public certificate\n"
+	 "-n, --node_cert [file]     Location of this nodes public certificate\n"
+	 "-p, --dh_privkey [file]    Location of the DH private key file\n"
+	 "-l, --logfile	[file]       Location of the log file\n"
+	 "-f, --disc_freq [freq ms]  The frequency with which to send discovery packets\n"
+	 "-t, --test_cert            Location of a certificate to check against\n"
+	 "-D, --Debug                Debug mode\n"
+	 "-i, --if iface             The interface to set the status of\n"
+	 "-s, --if_state [up|down]   The state of the interface\n"
+	 "-V, --version              Show version\n"
+	 "-?, --help                 Show help\n\n"
 	 "Dr Jodie Wetherall, <wj88@gre.ac.uk>\n\n", progname);
 
     exit(status);
+}
+
+void ReloadSignalled()
+{
+
 }
 
 // This signal handler ensures clean exits
 void signal_handler(int type)
 {
 	switch (type) {
+		case SIGUSR1:
+			ReloadSignalled();
+			break;
 		case SIGSEGV:
 		//alog(LOG_ERR, 0, __FUNCTION__, "SEGMENTATION FAULT!!!! Exiting!!! To get a core dump, compile with DEBUG option.");
 		case SIGINT:
@@ -130,19 +163,20 @@ void SetupSigHandlers()
 #ifndef DEBUG
 	signal(SIGSEGV, signal_handler);
 #endif
+	signal(SIGUSR1, signal_handler);
 }
 
 bool ProcessArgs(int argc, char **argv)
 {
 	// Remember the name of the executable...
-    	char* progname = strrchr(argv[0], '/');
+	char* progname = strrchr(argv[0], '/');
 
 	// Parse command line
 	while (1) {
 
 		int opt;
 		//opt = getopt_long(argc, argv, "i:fjln:dghoq:r:s:uwxDLRV", longopts, 0);
-		opt = getopt_long(argc, argv, "DdVc:n:p:t:l:", longopts, 0);
+		opt = getopt_long(argc, argv, "Dm:Vc:n:p:t:l:i:s:f:", longopts, 0);
 
 		if (opt == EOF)
 			break;
@@ -152,9 +186,17 @@ bool ProcessArgs(int argc, char **argv)
 				break;
 			case 'D':
 				debug = true;
-			case 'd':
-				is_daemon = true;
-				use_logfile = true;
+			case 'm':
+				if(strcmp(optarg, "daemon") == 0) {
+					mode = mode_daemon;
+					use_logfile = true;
+				}
+				else if(strcmp(optarg, "if") == 0) {
+					mode = mode_if;
+				}
+				else if(strcmp(optarg, "test_cert") == 0) {
+					mode = mode_test_cert;
+				}
 				break;
 			case 'n':
 				node_cert_filename = optarg;
@@ -172,6 +214,32 @@ bool ProcessArgs(int argc, char **argv)
 				use_logfile = true;
 				log_filename = optarg;
 				break;
+			case 'i':
+				if_name = optarg;
+				break;
+			case 's':
+				if(strcmp(optarg, "up") == 0)
+				 	if_state = if_state_up;
+				else if(strcmp(optarg, "down") == 0)
+					if_state = if_state_down;
+				else {
+					printf("Invalid value for argument -s %s\n", optarg);
+					exit(0);
+				}
+				break;
+			case 'f':
+				{
+					long val;
+					char* end;
+					val = strtol(optarg, &end, 10);
+					if(end == optarg || *end != '\0')
+					{
+						printf("Invalid value for argument -f %s\n", optarg);
+						exit(0);
+					}
+					update_freq = val;
+				}
+				break;
 			case 'V':
 				printf("\nSUPERMAN: v%d.%d © Faculty of Engineering and Science, University of Greenwich.\nAuthor: Dr Jodie Wetherall, <wj88@gre.ac.uk>\n\n", SUPERMAN_VERSION_MAJOR, SUPERMAN_VERSION_MINOR);
 				exit(0);
@@ -181,6 +249,32 @@ bool ProcessArgs(int argc, char **argv)
 				//exit(0);
 			default:
 				usage(0, progname);
+		}
+	}
+
+	if(mode == mode_none) {
+		printf("You must specify the mode.\n");
+		usage(0, progname);
+		exit(0);
+	}
+
+	if(mode == mode_daemon) {
+		// Do some validation
+	}
+
+	if(mode == mode_if) {
+		if(strcmp(if_name, "") == 0 || if_state == if_state_unknown) {
+			printf("You must specify -i and -s with -m if.\n");
+			usage(0, progname);
+			exit(0);
+		}
+	}
+
+	if(mode == mode_test_cert) {
+		if(strcmp(test_cert_filename, "")) {
+			printf("You must specify -t  with -m test_cert.\n");
+			usage(0, progname);
+			exit(0);
 		}
 	}
 }
@@ -251,11 +345,12 @@ void Run()
 	// unsigned int ifname_len = 5; // inc. null terminator
 	bool discoverySent = false;
 
+/*
 #ifdef ENCRYPT_LOCAL
         UpdateSupermanInterfaceTableEntry(3, "lo", false);
 #endif
 	UpdateSupermanInterfaceTableEntry(5, "eth0", true);
-
+*/
 
 	// Capture the time now.
 	time(&last_discovery_request);
@@ -266,7 +361,7 @@ void Run()
 
 		time_t timeNow;
 		time(&timeNow);
-		if(difftime(timeNow, last_discovery_request) >= 3.0)
+		if(difftime(timeNow, last_discovery_request) >= (update_freq * 1000))
 		{
 			time(&last_discovery_request);
 
@@ -288,45 +383,69 @@ void Run()
 		}
 	}
 
-#ifdef ENCRYPT_LOCAL
-	UpdateSupermanInterfaceTableEntry(3, "lo", false);
-#endif
-	UpdateSupermanInterfaceTableEntry(5, "eth0", false);
+	UnloadAll();
 }
 
 int main(int argc, char **argv)
 {
 	ProcessArgs(argc, argv);
 	lopen();
-	lprintf("SUPERMAN daemon started.\n");
 
-	if(is_daemon)
+	if(mode == mode_daemon)
+	{
+		lprintf("SUPERMAN daemon started.\n");
 		Daemonise();
+	}
+
+	// Setup the signal handlers for a graceful closure.
 	SetupSigHandlers();
 
+	bool requiresNetlink = (mode == mode_daemon || mode == mode_if);
+	bool requiresSecurity = (mode == mode_daemon || mode == mode_test_cert);
+
 	//lprintf("Main: Initialising netlink...\n");
-	if(!InitNetlink())
+	if(requiresNetlink)
 	{
-		exit(EXIT_FAILURE);
+		if(!InitNetlink())
+		{
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	//lprintf("Main: Initialising security...\n");
-	if(!InitSecurity(ca_cert_filename, node_cert_filename, node_dh_privatekey_filename))
+	if(requiresSecurity)
 	{
-		DeInitNetlink();
-		exit(EXIT_FAILURE);
+		if(!InitSecurity(ca_cert_filename, node_cert_filename, node_dh_privatekey_filename))
+		{
+			if(requiresNetlink)
+				DeInitNetlink();
+			exit(EXIT_FAILURE);
+		}
 	}
 
-	if(strlen(test_cert_filename) > 0)
-		TestCertificate(test_cert_filename);
-
-	Run();
+	switch(mode)
+	{
+		case mode_if:
+			UpdateSupermanInterfaceTableEntry(strlen(if_name), if_name, (if_state == if_state_up));
+			break;
+		case mode_test_cert:
+			TestCertificate(test_cert_filename);
+			break;
+		case mode_daemon:
+			Run();
+			break;
+	}
 
 	// Return success
-	DeInitNetlink();
-	DeInitSecurity();
+	if(requiresNetlink)
+		DeInitNetlink();
+	if(requiresSecurity)
+		DeInitSecurity();
 
-	lprintf("SUPERMAN daemon finished.\n");
+	if(mode == mode_daemon)
+	{
+		lprintf("SUPERMAN daemon finished.\n");
+	}
 	lclose();
 
 	exit(EXIT_SUCCESS);

@@ -29,6 +29,9 @@ enum {
 	K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY,
 #define K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY
 
+	K_UNLOAD_ALL,
+#define K_UNLOAD_ALL K_UNLOAD_ALL
+
 	K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY,
 #define K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY
 
@@ -82,6 +85,7 @@ enum {
 
 
 #define K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_NAME				"Update an interface table entry"
+#define K_UNLOAD_ALL_NAME										"Unload all tables (interfaces, security and queue)"
 #define K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_NAME				"Update a security table entry"
 #define K_UPDATE_SUPERMAN_BROADCAST_KEY_NAME					"Update the broadcast Key"
 
@@ -105,6 +109,7 @@ static struct {
 	char *name;
 } superman_typenames[SUPERMAN_MAX] = {
 	{ K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY,			K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_NAME				},
+	{ K_UNLOAD_ALL, 									K_UNLOAD_ALL_NAME					},
 	{ K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY,			K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY_NAME				},
 	{ K_UPDATE_SUPERMAN_BROADCAST_KEY,				K_UPDATE_SUPERMAN_BROADCAST_KEY_NAME					},
 	{ K_SEND_SUPERMAN_DISCOVERY_REQUEST,				K_SEND_SUPERMAN_DISCOVERY_REQUEST_NAME					},
@@ -150,6 +155,18 @@ typedef struct k_update_superman_interface_table_entry_msg {
 static struct nla_policy k_update_superman_interface_table_entry_genl_policy[K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MAX + 1] = {
 	[K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_INTERFACE_NAME]				=	{ .type = NLA_UNSPEC	},
 	[K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MONITOR_FLAG]				=	{ .type = NLA_FLAG	},
+};
+
+// K_UNLOAD_ALL
+enum {
+	__K_UNLOAD_ALL_ATTR_FIRST = 0,
+	__K_UNLOAD_ALL_ATTR_LAST,
+};
+#define K_UNLOAD_ALL_ATTR_MIN (__K_UNLOAD_ALL_ATTR_FIRST + 1)
+#define K_UNLOAD_ALL_ATTR_MAX (__K_UNLOAD_ALL_ATTR_LAST - 1)
+typedef struct k_unload_all_msg {
+} k_unload_all_msg_t;
+static struct nla_policy k_unload_all_genl_policy[K_UNLOAD_ALL_ATTR_MAX + 1] = {
 };
 
 // K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY
@@ -547,6 +564,15 @@ int k_update_superman_interface_table_entry(struct sk_buff *skb_msg, struct genl
 	UpdateSupermanInterfaceTableEntry(interface_name_len, interface_name, monitor_flag);
 
 	GENL_FREE(interface_name);
+
+	return 0;
+}
+
+int k_unload_all(struct sk_buff *skb_msg, struct genl_info *info)
+{
+	GENL_PARSE(K_UNLOAD_ALL_ATTR_MAX, k_unload_all_genl_policy)
+
+	UnloadAll();
 
 	return 0;
 }
@@ -1009,6 +1035,7 @@ static struct genl_ops superman_ops[SUPERMAN_MAX] = {
 
 	// Daemon to Kernel functions
 	SUPERMAN_OP(K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY, k_update_superman_interface_table_entry_genl_policy, k_update_superman_interface_table_entry)
+	SUPERMAN_OP(K_UNLOAD_ALL, k_unload_all_genl_policy, k_unload_all)
 	SUPERMAN_OP(K_UPDATE_SUPERMAN_SECURITY_TABLE_ENTRY, k_update_superman_security_table_entry_genl_policy, k_update_superman_security_table_entry)
 	SUPERMAN_OP(K_UPDATE_SUPERMAN_BROADCAST_KEY, k_update_superman_broadcast_key_genl_policy, k_update_superman_broadcast_key)
 	SUPERMAN_OP(K_SEND_SUPERMAN_DISCOVERY_REQUEST, k_send_superman_discovery_request_genl_policy, k_send_superman_discovery_request)
@@ -1073,6 +1100,12 @@ void UpdateSupermanInterfaceTableEntry(uint32_t interface_name_len, unsigned cha
 	if( monitor_flag &&
 		nla_put_flag	(msg,	K_UPDATE_SUPERMAN_INTERFACE_TABLE_ENTRY_ATTR_MONITOR_FLAG								))
 		fail = 1;
+	D_GENL_FINISH
+}
+
+void UnloadAll()
+{
+	D_GENL_START(K_UNLOAD_ALL)
 	D_GENL_FINISH
 }
 

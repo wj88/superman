@@ -24,6 +24,13 @@ void UpdateSupermanInterfaceTableEntry(uint32_t interface_name_len, unsigned cha
 	}
 }
 
+void UnloadAll()
+{
+	FlushInterfacesTable();
+	FlushQueue();
+	FlushSecurityTable();
+}
+
 void UpdateSupermanSecurityTableEntry(uint32_t address, uint8_t flag, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, int32_t timestamp, int32_t ifindex)
 {
 	UpdateOrAddSecurityTableEntry(address, flag, sk_len, sk, ske_len, ske, skp_len, skp, timestamp, ifindex);

@@ -92,7 +92,7 @@ bool RemoveInterfacesTableEntry(uint32_t ifindex)
 		write_unlock_bh(&interfaces_table_lock);
 		return true;
 	}
-	
+
 	write_unlock_bh(&interfaces_table_lock);
 	return false;
 }
@@ -189,7 +189,7 @@ int interfaces_table_info_proc_show(struct seq_file *m, void *v)
 			struct in_ifaddr **ifap;
 			struct in_ifaddr *ifa;
 
-			// Search through the list for a matching device name.		
+			// Search through the list for a matching device name.
 			for (ifap = &indev->ifa_list; (ifa = *ifap) != NULL; ifap = &ifa->ifa_next)
 			{
 				if (!strcmp(dev->name, ifa->ifa_label))

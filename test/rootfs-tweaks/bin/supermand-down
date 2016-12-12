@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 SUPERMAND_PID=$(ps -A | awk '/[s]uperman/{print $1}')
 if [ "${SUPERMAND_PID}" = "" ]; then

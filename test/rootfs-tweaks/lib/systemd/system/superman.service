@@ -1,9 +1,11 @@
 [Unit]
 Description=configure and load SUPERMAN
+Before=network-pre.target
+Wants=network-pre.target
 
 [Service]
 Type=simple
 ExecStart=/bin/configure_node
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=network.target

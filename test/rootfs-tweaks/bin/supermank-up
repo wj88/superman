@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 echo Bringing up the SUPERMAN kernel module...
 insmod /lib/modules/$(uname -r)/kernel/net/superman/superman.ko

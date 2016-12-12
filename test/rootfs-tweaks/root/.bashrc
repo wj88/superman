@@ -100,9 +100,7 @@ fi
 
 
 echo "7" > /proc/sys/kernel/printk
-#tail -f /var/log/kern.log &
 tail -f /var/log/supermand.log &
-superman-down
-superman-up
-#/bin/configure_node
+#superman-down
+#superman-up
 

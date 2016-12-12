@@ -74,4 +74,3 @@ int interfaces_table_info_proc_show(struct seq_file *m, void *v);
 #endif
 
 #endif
-
