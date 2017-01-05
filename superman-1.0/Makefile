@@ -18,9 +18,9 @@ install:
 	cp scripts/supermand-down $(DESTDIR)/sbin
 	cp scripts/supermand-up $(DESTDIR)/sbin
 	cp scripts/supermank-down $(DESTDIR)/sbin
-	cp scripts/supermank-down $(DESTDIR)/sbin
+	cp scripts/supermank-up $(DESTDIR)/sbin
 	cp scripts/superman-down $(DESTDIR)/sbin
-	cp scripts/superman-down $(DESTDIR)/sbin
+	cp scripts/superman-up $(DESTDIR)/sbin
 	mkdir -p $(DESTDIR)/etc/network
 	cp scripts/superman-ifupdown $(DESTDIR)/etc/network/superman
 	mkdir -p $(DESTDIR)/etc/network/if-down.d

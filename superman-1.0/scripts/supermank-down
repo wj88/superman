@@ -1,4 +1,4 @@
 #!/bin/bash
 
 echo Bringing down the SUPERMAN kernel module...
-rmmod superman
+modprobe -r superman
