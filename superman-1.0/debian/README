@@ -1,0 +1,26 @@
+The Debian Package superman
+----------------------------
+
+SUPERMAN - Security Using Pre-Existing Routing fopr Mobile Ad hoc Networks
+
+The increasing autonomy of Mobile Ad Hoc Networks (MANETs) has enabled a great
+many large-scale unguided missions, such as agricultural planning, conservation
+and similar surveying tasks. Commercial and military institutions have expressed
+great interest in such ventures; raising the question of security as the
+application of such systems in potentially hostile environments becomes a
+desired function of such networks. Preventing theft, disruption or destruction
+of such MANETs through cyber-attacks has become a focus for many researchers
+as a result. Virtual Private Networks (VPNs) have been shown to enhance the
+security of Mobile Ad hoc Networks (MANETs), at a high cost in network resources
+during the setup of secure tunnels. VPNs do not normally support broadcast
+communication, reducing their effectiveness in high-traffic MANETs, which have
+many broadcast communication requirements. To support routing, broadcast updates
+and efficient MANET communication, a Virtual Closed Network (VCN) architecture
+is proposed. By supporting private, secure communication in unicast, multicast
+and broadcast modes, VCNs provide an efficient alternative to VPNs when securing
+MANETs. Comparative analysis of the set-up overheads of VCN and VPN approaches
+is provided between OpenVPN, IPsec, Virtual Private LAN Service (VPLS), and the
+proposed VCN solution:
+	Security Using Pre-Existing Routing for MANETs (SUPERMAN).
+
+ -- Dr Jodie Wetherall <wj88@gre.ac.uk>  Wed, 04 Jan 2017 13:09:33 +0000

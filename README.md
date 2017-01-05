@@ -65,27 +65,9 @@ The daemon provides support to the kernel module as well as an element of contro
 
 The daemon communicates with the kernel module through a generic netlink interface an is therefore dependant on libnl-genl-3.0. It also requires a minimum OpenSSL version of 1.0.2d (this is when the ability to include a Diffie-Hellman key share within the certificate was introduced).
 
-Ideally, the daemon would be brought up at boot time, although for the purpose of testing, this is brought up in the test environment although with the init process.
+## Trying SUPERMAN ##
 
-The daemon can take several arguments although eventually most of the importants will be provided through configuration files:
-
-````
-
-Usage: superman
-
--c, --ca_cert file      Location of the CA public certificate
--n, --node_cert file    Location of this nodes public certificate
--p, --dh_privkey file   Location of the DH private key file
--t, --test_cert         Location of a certificate to check against
--D, --Debug             Debug mode
--d, --daemon            Daemon mode, i.e. detach from the console
--V, --version           Show version
--?, --help              Show help
-````
-
-## How do I get set up? ##
-
-You can try out SUPERMAN in a emulated test environment.
+You have a number of options for trying out SUPERMAN. You can use the test environment provided which emulates nodes using virtual machines to demonstrate how SUPERMAN works. Alternatively you can install SUPERMAN to a set of real devices in a live environment to try it out.
 
 The following guide has been tested and works with (although may not be limited to) the following:
 
@@ -93,12 +75,23 @@ The following guide has been tested and works with (although may not be limited 
 * Kernel version 4.4.
 * Running as a regular user who has sudo permissions.
 
-Clone the repository and change into the test directory:
+Clone the repository and change into the repos directory:
+
+````
+
+git clone https://bitbucket.org/wj88/superman.git
+cd superman
+````
+
+### Trying SUPERMAN in the test environment ###
+
+You can try out SUPERMAN in a emulated test environment.
+
+Change into the test directory:
 
 ```
 
-git clone https://bitbucket.org/wj88/superman.git
-cd superman/test
+cd test
 ```
 
 The source tree makes using of Makefiles to support the build process. There are a number of options which can be used but we're going to focus on the building the test environment and running a simulation. To make life easier, you can get up and running with a single command.
@@ -146,6 +139,121 @@ To verify the communication between nodes was in fact secured, the pcap files fo
 
 From withim wireshark, open up the individual nodes pcap files from /tmp.
 
+
+### Trying SUPERMAN in a live environment ###
+
+Please note, SUPERMAN is not designed to be used in an environment where nodes are Internet connected. There is not yet any kind of gateway support to securely allow packets out of the MANET. The best way to experiment with this is using a set of single board computers, such as the Raspberry Pi. In addition, you will need to use a MANET routing protocol or configure static routes in advance which are set at system boot - this guide does not help with this.
+
+### Installing ###
+
+An APT package can be generated from the git repo. This package itself contains the source code for SUPERMAN and builds the binaries when installed on the nodes. This keeps the package architecture independant and, as the kernel-module needs to be build per kernel anyway, seems to make sense.
+
+To build the APT package:
+
+````
+
+./build-aptpkg.sh
+````
+
+The output is superman_1.0_all.deb which can then be copied over to the target nodes and install using:
+
+````
+
+sudo dpkg -i superman_1.0_all.deb
+````
+
+If this fails with a message about the package depending on something that isn't installed, you can fix it with:
+
+````
+
+sudo apt-get -fy install
+```` 
+
+### Setting up security ###
+
+SUPERMAN requires a CA to be used for the generation of signed certificates. The CA does not need to be accessible when the system is running, just for certificate generation. The system used as the CA will need OpenSSL >= 1.0.2d to be able to produce certificates which use diffie-hellman keys.
+
+To create a CA certificate (which only needs to be done once), typically with the CA's /etc/superman/ directory:
+
+````
+
+# Make sure the /etc/superman directory exists
+mkdir -p /etc/superman
+
+# Create a CA private root key
+openssl genrsa -out /etc/superman/ca_privatekey.pem 2048
+
+# Create a CA certificate
+openssl req -x509 -new -nodes -subj "/C=UK/ST=London/L=Greenwich/O=University of Greenwich/OU=Faculty of Engineering and Science/CN=fes.gre.ac.uk" -key /etc/superman/ca_privatekey.pem -days 1024 -out /etc/superman/ca_certificate.pem
+
+# Generate DH parameters (1024 bits long safe prime, generator 2):
+openssl dhparam -out /etc/superman/dh_params.pem 1024
+
+#
+# Now copy the following to each node:
+#	dh_params.pem
+#	ca_certificate.pem
+#
+````
+
+The dh_params.pem file must then be copied to each node to be used as part of the network. It is from these parameters that a node will generate their diffie-hellman public/private key pair. The ca_certificate.pem file is the CA's public certificate which is used to authenticate another nodes which they join the network.
+
+Typically, these files will be copied to each nodes /etc/superman/ directory.
+
+````
+
+# Make sure the /etc/superman directory exists
+mkdir -p /etc/superman
+
+# Generate private key from the parameters (public key is derivable):
+openssl genpkey -paramfile /etc/superman/dh_params.pem -out /etc/superman/node_dh_privatekey.pem
+
+# Derive public key from the private key:
+openssl pkey -in /etc/superman/node_dh_privatekey.pem -pubout -out /etc/superman/node_dh_publickey.pem
+
+# Generate an RSA private key (public key is derivable):
+openssl genrsa -out /etc/superman/node_rsa_privatekey.pem 1024
+
+# Create a certificate request from the RSA key:
+openssl req -new -key /etc/superman/node_rsa_privatekey.pem -out /etc/superman/node_rsa_certreq.csr
+
+#
+# Now copy the following to the CA to generate a certificate:
+#	node_rsa_certreq.csr
+#	node_dh_publickey.pem
+#
+````
+
+The node_rsa_certreq.csr and node_dh_publickey.pem files must be copied to the CA. The CA will then use these to generate the node a signed certificate which can be verified by the other nodes with the network.
+
+````
+
+# With the certificate request and the DH public key, generate a DH certificate.
+openssl x509 -req -in node_rsa_certreq.csr -CAkey /etc/superman/ca_privatekey.pem -CA /etc/superman/ca_certificate.pem -force_pubkey node_dh_publickey.pem -out node_certificate.pem -CAcreateserial
+
+#
+# Now copy the following back to the node:
+#	node_certificate.pem
+#
+````
+
+The node_certicicate.pem is the nodes personal certificate generated by the CA. It needs to be given back to the node so that it can be used by the node to identify itself when joining the network.
+
+Typically, the node_certificate.pem file sits under the /etc/superman/ directory on the node.
+
+
+### Settings ####
+
+There is a settings file, /etc/superman/superman.conf, which is used to configure SUPERMAN. It is worth take a look to ensure it matches with where you placed your certificate files, etc.
+
+````
+
+nano /etc/superman/superman.conf
+````
+
+### Done ###
+
+That's it. You're now ready to reboot your system and you should be up and running.
 
   
 ## Licence ##

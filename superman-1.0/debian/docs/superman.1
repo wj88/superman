@@ -1,0 +1,80 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.\" (C) Copyright 2017 Dr Jodie Wetherall <wj88@gre.ac.uk>,
+.\"
+.\" First parameter, NAME, should be all caps
+.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+.\" other parameters are allowed: see man(7), man(1)
+.TH Superman 1 "January  4 2017"
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+superman \- Security Using Pre-Existing Routing in MANETs
+.SH SYNOPSIS
+.B superman -m
+.RI mode
+.B [
+.RI options
+.B ]
+.SH DESCRIPTION
+The
+.B superman
+command acts has both a daemon and control mechanism to
+interact with a running daemon. It is not normally
+executed independantly but via a set of scripts
+including
+.I supermand-up
+and
+.I supermand-down
+or via the superman if up/down script. 
+.SH OPTIONS
+.IP -m, --mode
+Set the mode
+.IP "-m daemon"
+daemon mode, i.e. detach from the console
+.IP "-m if"
+if mode, to enable or disable an interface
+.IP "-m test-cert"
+test_cert mode, to test a certificate
+.TP
+.IP "-c, --ca_cert [file]"
+Location of the CA public certificate
+.IP "-n, --node-cert [file]"
+Location of this nodes public certificate
+.IP "-p, --dh_privkey [file]"
+Location of the DH private key file
+.IP "-l, --logfile [file]"
+Location of the log file
+.IP "-f, --disc-freq [freq ms]"
+The frequency with which to send discovery packets
+.IP "-t, --test_cert [file]"
+Location of a certificate to check against
+.IP "-D, --Debug"
+Debug mode
+.IP "-i, --if [iface]"
+The interface to set the status of
+.IP "-s, --if_staste [up|down]"
+The state of the interface
+.IP "-V, --version"
+Show version
+.IP "-?, --help"
+Show help
+.SH FILES
+.I /etc/superman/superman.conf
+.RS
+The superman configuration file. See
+.BR superman.conf (5)
+for further details
+.SH Author
+Dr Jodie Wetherall <wj88@gre.ac.uk>
+.SH SEE ALSO
+.BR superman.conf (5),

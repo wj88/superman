@@ -1,0 +1,70 @@
+#!/bin/bash
+# SUPERMAN network interface control. When in interface is brought up, as long as the
+# it is included in the superman.conf interfaces settting, it will be automatically
+# registered with SUPERMAN. Vica versa for bringing the interface down.
+
+set -e
+
+# Don't bother to restart sshd when lo is configured.
+if [ "$IFACE" = lo ]; then
+	exit 0
+fi
+
+# OpenSSH only cares about inet and inet6. Get ye gone, strange people
+# still using ipx.
+if [ "$ADDRFAM" != inet ]; then
+	exit 0
+fi
+
+# Is the filesystem mounted?
+if [ ! -e /bin/superman ]; then
+	exit 0
+fi
+
+#if [ ! -f /var/run/sshd.pid ] || \
+#   [ "$(ps -p "$(cat /var/run/sshd.pid)" -o comm=)" != sshd ]; then
+#	exit 0
+#fi
+
+# Is the superman kernel module loaded?
+if ! lsmod | grep "superman" &> /dev/null ; then
+	exit 0
+fi
+
+# Do we have the settings file?
+if [ ! -f /etc/superman/superman.conf ]; then
+	exit 0
+fi
+
+declare -A settings
+while IFS='=' read key value; do settings[${key}]="$(eval echo ${value})"; done < <(sed 's/#.*//;s/^[ \t]*//;s/[ \t]*$//;/^\s*$/d' /etc/superman/superman.conf)
+
+# Only run from ifup.
+if [ "$MODE" == start ]; then
+
+	# Add the interface to the SUPERMAN daemon, if we're configured to do so.
+	for interface in ${settings["interfaces"]}; do
+		if [ "$interface" == "$IFACE" ]; then
+			# Add the interface to SUPERMAN
+			superman -m if -i $IFACE -s down
+		fi
+	done
+
+	exit 0
+fi
+
+# Only run from ifdown
+if [ "$MODE" == stop ]; then
+
+	# Remove the interface from the SUPERMAN daemon, if it shouldn't be there.
+	for interface in ${settings["interfaces"]}; do
+		if [ "$interface" == "$IFACE" ]; then
+			# Remove the interface from SUPERMAN
+			superman -m if -i $IFACE -s down
+		fi
+	done
+
+	exit 0
+fi
+
+exit 0

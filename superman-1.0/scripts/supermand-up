@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Is the superman kernel module loaded?
+if ! lsmod | grep "superman" &> /dev/null ; then
+	supermank-up
+fi
+
+# We must have a configuration file otherwise we don't know what wer're doing.
+if [ ! -e /etc/superman/superman.conf ]; then
+	exit 0
+fi
+
+# Load up the settings into an associated array.
+declare -A settings
+while IFS='=' read key value; do settings[${key}]="$(eval echo ${value})"; done < <(sed 's/#.*//;s/^[ \t]*//;s/[ \t]*$//;/^\s*$/d' /etc/superman/superman.conf)
+
+# Start the daemon
+echo Bringing up the SUPERMAN daemon...
+superman -m daemon -c ${settings["ca-certificate"]} -n ${settings["node-certificate"]} -p ${settings["node-privatekey"]} -l ${settings["log-file"]} -f ${settings["discovery-interval"]}
+
+# Bring online those network interfaces which are flagged in the settings and are up
+for ifname in ${settings["interfaces"]}; do
+	if [ -f /sys/class/net/${ifname}/operstate ]; then
+		if grep "up" /sys/class/net/${ifname}/operstate >>/dev/null ; then
+			superman -m if -i ${ifname} -s up
+		fi
+	fi
+done;

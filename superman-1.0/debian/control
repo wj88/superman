@@ -1,0 +1,15 @@
+Source: superman
+Section: unknown
+Priority: optional
+Maintainer: Dr Jodie Wetherall <wj88@gre.ac.uk>
+Build-Depends: debhelper (>=9)
+Standards-Version: 3.9.6
+Homepage: <insert the upstream URL, if relevant>
+Vcs-Git: git@bitbucket.org:wj88/superman.git
+Vcs-Browser: https://bitbucket.org/wj88/superman.git
+
+Package: superman
+Architecture: all
+Depends: libnl-3-dev, libnl-genl-3-dev, libssl-dev (>= 1.0.2), dkms, kmod, build-essential
+Description: Security Using Pre-Existing Routing in
+ Mobile Ad hoc Networks

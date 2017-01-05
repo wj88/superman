@@ -2,6 +2,8 @@
 *.o
 *.o.cmd
 *.ko.cmd
+*.deb
+*.changes
 kernel-module/.tmp_versions/*
 kernel-module/Module.symvers
 kernel-module/modules.order
@@ -23,3 +25,5 @@ test/pkgs
 test/mountpoint/*
 test/mountpoint
 daemon/superman
+superman-1.0/debian/*.log
+superman-1.0/debian/superman/*

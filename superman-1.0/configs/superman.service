@@ -1,0 +1,11 @@
+[Unit]
+Description=SUPERMAN
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=simple
+ExecStart=/sbin/superman-up
+
+[Install]
+WantedBy=network.target
