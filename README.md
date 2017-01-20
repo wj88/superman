@@ -3,11 +3,11 @@
 
 ## What is this reposoritory for? ##
 
-To provide some background context, it would be best to refer to [this research paper](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7412128).
+To provide some background context, it would be best to refer to [this research paper](http://ieeexplore.ieee.org/document/7809102/).
 
-In summary:
+The papers abstract is as follows:
 
-*The increasing autonomy of Mobile Ad Hoc Networks (MANETs) has enabled a great many large-scale unguided missions, such as agricultural planning, conservation and similar surveying tasks. Commercial and military institutions have expressed great interest in such ventures; raising the question of security as the application of such systems in potentially hostile environments becomes a desired function of such networks. Preventing theft, disruption or destruction of such MANETs through cyber-attacks has become a focus for many researchers as a result. Virtual Private Networks (VPNs) have been shown to enhance the security of Mobile Ad hoc Networks (MANETs), at a high cost in network resources during the setup of secure tunnels. VPNs do not normally support broadcast communication, reducing their effectiveness in high-traffic MANETs, which have many broadcast communication requirements. To support routing, broadcast updates and efficient MANET communication, a Virtual Closed Network (VCN) architecture is proposed. By supporting private, secure communication in unicast, multicast and broadcast modes, VCNs provide an efficient alternative to VPNs when securing MANETs. Comparative analysis of the set-up overheads of VCN and VPN approaches is provided between OpenVPN, IPsec, Virtual Private LAN Service (VPLS), and the proposed VCN solution: Security Using Pre-Existing Routing for MANETs (SUPERMAN).*
+*The flexibility and mobility of Mobile Ad hoc Networks (MANETs) have made them increasing popular in a wide range of use cases. To protect these networks, security protocols have been developed to protect routing and application data. However, these protocols only protect routes or communication, not both. Both secure routing and communication security protocols must be implemented to provide full protection. The use of communication security protocols originally developed for wireline and WiFi networks can also place a heavy burden on the limited network resources of a MANET. To address these issues, a novel secure framework (SUPERMAN) is proposed. The framework is designed to allow existing network and routing protocols to perform their functions, whilst providing node authentication, access control, and communication security mechanisms. This paper presents a novel security framework for MANETs, SUPERMAN. Simulation results comparing SUPERMAN with IPsec, SAODV and SOLSR are provided to demonstrate the proposed frameworks suitability for wireless communication security.*
 
 This solution consists of two parts:
 
@@ -261,17 +261,23 @@ That's it. You're now ready to reboot your system and you should be up and runni
 Please note the license file (in the root of the source reposoritory name LICENCE) which is fairly open and flexible. The only condition is:
 
 Any academic works (including but not limited to conference and journal papers) produced as a result of direct or indirect use of this software must cite the following publication:
-[http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7412128](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7412128)
+[http://ieeexplore.ieee.org/document/7809102/](http://ieeexplore.ieee.org/document/7809102/)
 
 ```
 Bibtex
-@inproceedings{hurley2015virtual,
-  title={Virtual closed networks: A secure approach to autonomous mobile ad hoc networks},
-  author={Hurley-Smith, Darren and Wetherall, Jodie and Adekunle, Andrew},
-  booktitle={2015 10th International Conference for Internet Technology and Secured Transactions (ICITST)},
-  pages={391--398},
-  year={2015},
-  organization={IEEE}
+@ARTICLE{
+	7809102, 
+	author={D. Hurley-Smith and J. Wetherall and A. Adekunle}, 
+	journal={IEEE Transactions on Mobile Computing}, 
+	title={SUPERMAN: Security Using Pre-Existing Routing for Mobile Ad hoc Networks}, 
+	year={2017}, 
+	volume={PP}, 
+	number={99}, 
+	pages={1-1}, 
+	keywords={Ad hoc networks;Authentication;Mobile computing;Routing;Routing protocols;access control;authentication;communication system security;mobile ad hoc networks}, 
+	doi={10.1109/TMC.2017.2649527}, 
+	ISSN={1536-1233}, 
+	month={},
 }
 ```
 
