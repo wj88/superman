@@ -1,20 +1,26 @@
-Copyright (c) 2016 Dr Jodie Wetherall <wj88@gre.ac.uk>, Faculty of Engineering and Science, University of Greenwich
+Copyright (c) 2017 Dr Jodie Wetherall <wj88@gre.ac.uk>, Faculty of Engineering and Science, University of Greenwich
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 Any academic works (including but not limited to conference and journal papers) produced as a result of direct or indirect use of this software must cite the following publication:
-http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7412128
+http://ieeexplore.ieee.org/document/7809102/
 
 Bibtex
-@inproceedings{hurley2015virtual,
-  title={Virtual closed networks: A secure approach to autonomous mobile ad hoc networks},
-  author={Hurley-Smith, Darren and Wetherall, Jodie and Adekunle, Andrew},
-  booktitle={2015 10th International Conference for Internet Technology and Secured Transactions (ICITST)},
-  pages={391--398},
-  year={2015},
-  organization={IEEE}
+@ARTICLE{
+	7809102, 
+	author={D. Hurley-Smith and J. Wetherall and A. Adekunle}, 
+	journal={IEEE Transactions on Mobile Computing}, 
+	title={SUPERMAN: Security Using Pre-Existing Routing for Mobile Ad hoc Networks}, 
+	year={2017}, 
+	volume={PP}, 
+	number={99}, 
+	pages={1-1}, 
+	keywords={Ad hoc networks;Authentication;Mobile computing;Routing;Routing protocols;access control;authentication;communication system security;mobile ad hoc networks}, 
+	doi={10.1109/TMC.2017.2649527}, 
+	ISSN={1536-1233}, 
+	month={},
 }
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
