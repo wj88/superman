@@ -19,7 +19,7 @@ uninstall:
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
-	-rm ../src/*.o
+	rm -f ../src/*.o
 
 else
 

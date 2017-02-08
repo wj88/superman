@@ -1,6 +1,12 @@
 binary:
 	#dpkg-buildpackage -A -uc
 
+pkg:
+	dpkg-buildpackage -A -uc
+
+clean:
+	rm -f ../superman_1.0_all.deb ../superman_1.0_all.changes
+
 install:
 	mkdir -p $(DESTDIR)/etc/superman
 	cp configs/superman.conf $(DESTDIR)/etc/superman/superman.conf

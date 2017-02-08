@@ -152,7 +152,7 @@ To build the APT package:
 
 ````
 
-./build-aptpkg.sh
+make pkg
 ````
 
 The output is superman_1.0_all.deb which can then be copied over to the target nodes and install using:
