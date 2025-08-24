@@ -8,10 +8,10 @@ local superman_hdr_fields = {
 	last_addr = ProtoField.ipv4("superman.last_addr", "Last Address"),
 
 	-- Other fields
-	public_key = ProtoField.bytes("superman.public_key", "Public Key", base.HEX),
-	encrypted_data = ProtoField.bytes("superman.encrypted_data", "Encrypted Data", base.HEX),
-	e2e_hmac = ProtoField.bytes("superman.e2ehmac", "E2E HMAC", base.HEX),
-	p2p_hmac = ProtoField.bytes("superman.p2phmac", "P2P HMAC", base.HEX)
+	public_key = ProtoField.bytes("superman.public_key", "Public Key", base.DASH),
+	encrypted_data = ProtoField.bytes("superman.encrypted_data", "Encrypted Data", base.DASH),
+	e2e_hmac = ProtoField.bytes("superman.e2ehmac", "E2E HMAC", base.DASH),
+	p2p_hmac = ProtoField.bytes("superman.p2phmac", "P2P HMAC", base.DASH)
 
 	-- Fields we cannot use because they're data is encrypted.
 	--certificate_len = ProtoField.uint16("superman.certificate_len", "Certificate Len", base.DESC),

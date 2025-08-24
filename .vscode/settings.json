@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "stdint.h": "c",
+        "stdint-gcc.h": "c",
+        "net.h": "c",
+        "superman.h": "c",
+        "x509_vfy.h": "c"
+    },
+    "C_Cpp.dimInactiveRegions": false
+}

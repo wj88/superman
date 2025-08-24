@@ -25,8 +25,10 @@ if [ ! -f ${IMG_NAME} ]; then
 		sudo debootstrap $(lsb_release -sc) ./rootfs-base http://archive.ubuntu.com/ubuntu
 	fi
 	ROOTFS_UNION=rootfs-base
-
 fi
+# Only include here for debugging otherwise the change sync'ing will take a long time.
+#ROOTFS_UNION=rootfs-base
+
 
 # Copy over the kernel modules (some are needed so grab them all)
 if [ ! -d ./rootfs-superman ]; then
@@ -69,7 +71,14 @@ ROOTFS_UNION=rootfs-tweaks:${ROOTFS_UNION}
 
 # Union the filesystems into one
 [[ ! -d ./rootfs ]] && mkdir rootfs
-sudo unionfs-fuse ${ROOTFS_UNION} rootfs
+#echo sudo unionfs-fuse -o cow ${ROOTFS_UNION} rootfs
+sudo unionfs-fuse -o cow ${ROOTFS_UNION} rootfs
+
+# Uncomment if you want some time with the unioned rootfs
+#read -p "Press enter to continue"
+
+# Apply any rootfs updates
+#sudo chroot ./rootfs bash -c "netplan generate && netplan apply"
 
 # sudo bash -c "cd rootfs; find . | cpio --create --format='newc' > ../rootfs.newc"
 
@@ -78,8 +87,9 @@ if [ ! -f ${IMG_NAME} ]; then
 	echob Creating the disk image of the root filesystem...
 
 	# Caculate the size of our rootfs and add 100MB for the image overheads.
-	ROOTFS_SIZE=$(sudo bash -c "cd rootfs; du -sb | cut -f -1")
-	IMG_SIZE=$(($ROOTFS_SIZE + 104857600))
+	#ROOTFS_SIZE=$(sudo bash -c "cd rootfs; du -sb | cut -f -1")
+	#IMG_SIZE=$(($ROOTFS_SIZE + 104857600))
+	IMG_SIZE=2147483648
 
 	# Create the rootfs.qcow2 image.
 	qemu-img create -f qcow2 ${IMG_NAME} ${IMG_SIZE} >/dev/null
@@ -118,6 +128,7 @@ sudo mount /dev/nbd0p1 mountpoint/
 sudo rsync -aAXv rootfs/ mountpoint/
 
 # Unmount the mounted partition
+sync
 sudo umount mountpoint
 rmdir mountpoint
 

@@ -117,33 +117,15 @@ inline struct superman_header* get_superman_header(struct sk_buff *skb);
 bool EncapsulatePacket(struct superman_packet_info* spi);
 bool DecapsulatePacket(struct superman_packet_info* spi);
 
-void SendDiscoveryRequestPacket(uint32_t sk_len, unsigned char* sk);
-void SendCertificateRequestPacket(uint32_t addr, uint32_t sk_len, unsigned char* sk);
-void SendCertificateExchangePacket(uint32_t addr, uint32_t certificate_len, unsigned char* certificate);
-void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t addr, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key);
-void SendAuthenticatedSKRequestPacket(uint32_t originaddr, uint32_t targetaddr);
-void SendAuthenticatedSKResponsePacket(uint32_t originaddr, uint32_t targetaddr, uint32_t sk_len, unsigned char* sk);
+void SendDiscoveryRequestPacket(uint32_t ifindex, uint32_t sk_len, unsigned char* sk);
+void SendCertificateRequestPacket(uint32_t ifindex, uint32_t addr, uint32_t sk_len, unsigned char* sk);
+void SendCertificateExchangePacket(uint32_t ifindex, uint32_t addr, uint32_t certificate_len, unsigned char* certificate);
+void SendCertificateExchangeWithBroadcastKeyPacket(uint32_t ifindex, uint32_t addr, uint32_t certificate_len, unsigned char* certificate, uint32_t broadcast_key_len, unsigned char* broadcast_key);
+void SendAuthenticatedSKRequestPacket(uint32_t ifindex, uint32_t originaddr, uint32_t targetaddr);
+void SendAuthenticatedSKResponsePacket(uint32_t ifindex, uint32_t originaddr, uint32_t targetaddr, uint32_t sk_len, unsigned char* sk);
 
-void SendBroadcastKeyExchange(uint32_t broadcast_key_len, unsigned char* broadcast_key);
-void SendSKInvalidatePacket(uint32_t addr);
-
-/*
-void SendCertificateRequest(struct sk_buff* rx_sk);
-void SendCertificateResponse(struct sk_buff* rx_sk);
-bool ReceiveCertificateExchange(struct sk_buff* rx_sk);
-bool HaveSK(struct sk_buff* rx_sk);
-void SendAuthenticatedSKRequest(struct sk_buff* sk);
-void SendAuthenticatedSKResponse(struct sk_buff* rx_sk);
-bool ReceiveAuthenticatedSKResponse(struct sk_buff* rx_sk);
-void InvalidateSK(struct sk_buff* rx_sk);
-bool SendP2PPacket(struct sk_buff* tx_sk);
-bool SendE2EPacket(struct sk_buff* tx_sk);
-bool ReceiveP2PPacket(struct sk_buff* rx_sk);
-bool ReceiveE2EPacket(struct sk_buff* rx_sk);
-*/
-
-//struct sk_buff* EncapsulateSupermanPacket(struct sk_buff *skb, u_int8_t type, u_int16_t timestamp);
-//struct sk_buff* DecapsulateSupermanPacket(struct sk_buff *skb);
+void SendBroadcastKeyExchange(uint32_t ifindex, uint32_t broadcast_key_len, unsigned char* broadcast_key);
+void SendSKInvalidatePacket(uint32_t ifindex, uint32_t addr);
 
 #endif
 

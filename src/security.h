@@ -17,9 +17,6 @@
 void dump_packet(struct sk_buff* skb);
 void dump_bytes(void* d, int len);
 
-bool UpdateBroadcastKey(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp, bool overwrite);
-bool GetBroadcastKey(uint32_t* sk_len, unsigned char** sk);
-
 // TODO: Add sanity checks to ensure skb size against superman header reported payload lengths.
 unsigned int AddE2ESecurity(struct superman_packet_info* spi, unsigned int (*callback)(struct superman_packet_info*, bool));
 unsigned int RemoveE2ESecurity(struct superman_packet_info* spi, unsigned int (*callback)(struct superman_packet_info*, bool));
@@ -31,17 +28,23 @@ void DeInitSecurity(void);
 
 #else
 
-void DumpKeys(uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp);
+#include <openssl/evp.h>
 
-bool MallocAndCopyPublickey(uint32_t* sk_len, unsigned char** sk);
-bool MallocAndCopyCertificate(uint32_t* certificate_len, unsigned char** certificate);
+void DumpPrivateKey(uint32_t level, unsigned char* source, unsigned char* name, EVP_PKEY* sk_key);
+void DumpPublicKey(uint32_t level, unsigned char* source, unsigned char* name, EVP_PKEY* sk_key);
+void DumpKey(uint32_t level, unsigned char* source, unsigned char* name, uint32_t skey_len, unsigned char* skey);
+void DumpKeys(uint32_t level, unsigned char* source, uint32_t sk_len, unsigned char* sk, uint32_t ske_len, unsigned char* ske, uint32_t skp_len, unsigned char* skp);
+
+bool MallocAndCopyPublickey(uint32_t ifindex, uint32_t* sk_len, unsigned char** sk);
+bool MallocAndCopyCertificate(uint32_t ifindex, uint32_t* certificate_len, unsigned char** certificate);
 bool MallocAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* ske_len, unsigned char** ske, uint32_t* skp_len, unsigned char** skp);
-bool MallocAndDHAndGenerateSharedkeys(uint32_t sk_len, unsigned char* sk, uint32_t* ske_len, unsigned char** ske, uint32_t* skp_len, unsigned char** skp);
+bool MallocAndGenerateSharedkeysFromInterface(uint32_t ifindex, uint32_t sk_len, unsigned char* sk, uint32_t* ske_len, unsigned char** ske, uint32_t* skp_len, unsigned char** skp);
 bool MallocAndGenerateNewKey(uint32_t* key_len, unsigned char** key);
 
-bool VerifyCertificate(uint32_t cert_data_len, unsigned char* cert_data, unsigned char* node_share, int node_share_len);
+bool LoadNodeCertificates(uint32_t ifindex, unsigned char* node_cert_filename, unsigned char* node_privatekey_filename);
+bool VerifyCertificate(uint32_t ifindex, uint32_t cert_data_len, unsigned char* cert_data, unsigned char* node_share, int node_share_len);
 bool TestCertificate(unsigned char* cert_filename);
-bool InitSecurity(unsigned char* ca_cert_filename, unsigned char* node_cert_filename, unsigned char* node_dh_privatekey_filename);
+bool InitSecurity(unsigned char* ca_cert_filename);
 void DeInitSecurity(void);
 
 #endif

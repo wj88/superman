@@ -16,13 +16,13 @@ while IFS='=' read key value; do settings[${key}]="$(eval echo ${value})"; done 
 
 # Start the daemon
 echo Bringing up the SUPERMAN daemon...
-superman -m daemon -c ${settings["ca-certificate"]} -n ${settings["node-certificate"]} -p ${settings["node-privatekey"]} -l ${settings["log-file"]} -f ${settings["discovery-interval"]}
+superman -m daemon -c ${settings["ca-certificate"]} -l ${settings["log-file"]} -f ${settings["discovery-interval"]}
 
 # Bring online those network interfaces which are flagged in the settings and are up
 for ifname in ${settings["interfaces"]}; do
 	if [ -f /sys/class/net/${ifname}/operstate ]; then
 		if grep "up" /sys/class/net/${ifname}/operstate >>/dev/null ; then
-			superman -m if -i ${ifname} -s up
+			nohup superman -m if -i ${ifname} -s up -n ${settings["node-${ifname}-certificate"]} -p ${settings["node-${ifname}-privatekey"]} &
 		fi
 	fi
-done;
+done

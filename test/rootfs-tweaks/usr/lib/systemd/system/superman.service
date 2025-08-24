@@ -1,0 +1,11 @@
+[Unit]
+Description=SUPERMAN (Security Using Pre-Existing Routing in Mobile Ad-hoc Networks)
+Before=networkd-dispatcher.target
+Wants=networkd-dispatcher.target
+
+[Service]
+Type=forking
+ExecStart=/usr/sbin/configure_node
+
+[Install]
+WantedBy=multi-user.target

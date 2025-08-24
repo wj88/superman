@@ -5,6 +5,7 @@
 startTerm()
 {
 	echob Starting QEMU emulation for node ${NODE_ID}...
+	sudo xauth add $(xauth -f ${HOME}/.Xauthority list|tail -1)
 	sudo gnome-terminal --disable-factory -e "bash ${BASH_SOURCE} $1 Y" 2&> /dev/null
 }
 
@@ -21,15 +22,17 @@ startQemu()
 	local QEMU_ARGS=$(echo \
 	-kernel /boot/vmlinuz-`uname -r` \
 	-initrd /boot/initrd.img-`uname -r` \
-	--append \"root=/dev/sda1 rw ip=dhcp rd.shell=1 console=ttyS0 raid=noautodetect ipv6.disable=1 net.ifnames=0 biosdevname=0 supermanid=${NODE_ID}\" \
+	--append \"root=/dev/sda1 rw rd.shell=1 console=ttyS0 raid=noautodetect ipv6.disable=1 net.ifnames=0 biosdevname=0 supermanid=${NODE_ID}\" \
 	-drive file=rootfs.qcow2 -snapshot \
 	-m 512M \
-	-net nic,vlan=0,macaddr=52:54:00:12:34:${PADDED_NODE_ID} \
-	-net tap,vlan=0,ifname=tap${NODE_ID},script=qemu-net-up.sh,downscript=qemu-net-down.sh \
-	-net dump,file=/tmp/superman-node${NODE_ID}.pcap -net user \
+	-netdev tap,id=node_${NODE_ID},ifname=tap${NODE_ID},script=qemu-net-up.sh,downscript=qemu-net-down.sh \
+	-device virtio-net-pci,netdev=node_${NODE_ID},mac=52:54:00:12:34:${PADDED_NODE_ID} \
+	-object filter-dump,id=dump_id_${NODE_ID},netdev=node_${NODE_ID},file=/tmp/superman-node${NODE_ID}.pcap \
 	-rtc base=localtime \
 	-nographic \
 	)
+#	-device e1000,netdev=node_${NODE_ID},mac=52:54:00:12:34:${PADDED_NODE_ID} \
+#	-netdev user,id=node_${NODE_ID},ipv4=on \
 	# Use these for kernel debugging.
 	# -s -S
 

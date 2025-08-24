@@ -34,6 +34,7 @@ struct superman_packet_info
 	int (*okfn)(struct net *, struct sock *, struct sk_buff *);
 	struct sock *sk;
 	struct net *net;
+	struct net_device *dev;
 	
 	// Useful pointers to the relevant parts of the packet.
 	struct superman_header* shdr;
@@ -73,7 +74,7 @@ struct superman_packet_info
 
 	// Queue support
 	__be32 queue_addr;
-	struct timeval queue_entry_time;
+	struct timespec64 queue_entry_time;
 
 
 	// Temporary spi identifier

@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug SUPERMAN Daemon",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/daemon/superman",
+      "args": [
+        "-m", "test_cert",
+        "-c", "../test/rootfs-tweaks/etc/superman/ca_certificate.pem",
+        "-n", "/tmp/superman/superman-0_certificate.pem",
+        "-p", "/tmp/superman/superman-0_x25519_privatekey.pem",
+        "-t", "/tmp/superman/superman-0_certificate.pem"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/daemon",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    }
+  ]
+}

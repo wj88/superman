@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build SUPERMAN Daemon",
+      "type": "shell",
+      "command": "make",
+      "args": [
+        "BUILD=debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/daemon"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

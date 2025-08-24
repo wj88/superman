@@ -21,9 +21,17 @@
 #include <stdint.h>
 #include <string.h>
 
+enum log_levels {
+	LOG_LEVEL_ALWAYS,
+	LOG_LEVEL_ERROR,
+	LOG_LEVEL_WARNING,
+	LOG_LEVEL_INFO,
+	LOG_LEVEL_DEBUG
+};
+extern u_int32_t log_level;
 extern FILE* log_file;
 extern bool use_logfile;
-void lprintf(const char* fmt, ...);
+void lprintf(const u_int32_t level, const char* fmt, ...);
 
 #endif
 

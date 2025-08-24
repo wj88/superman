@@ -5,69 +5,72 @@
 
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#include "net.h"
 
 struct interfaces_table_entry {
 	struct list_head	l;
-	int32_t			ifindex;
+	struct net 			*net;
+	int32_t				ifindex;
 };
 
-rwlock_t* GetInterfacesTableLock(void);
-struct list_head* GetInterfacesTable(void);
-uint32_t GetInterfacesCount(void);
+struct interfaces_table {
+	rwlock_t interfaces_table_lock;
+    struct list_head interfaces_table_head;
+    unsigned int interfaces_table_total;
+};
 
-#define INTERFACE_ITERATOR_START(DEV_VAR)											\
-	{															\
-		int i = 0;													\
-		int32_t* interfaces = NULL;											\
-		uint32_t interfaces_count = 0;											\
-		rwlock_t* interfaces_table_lock = GetInterfacesTableLock();							\
-		read_lock_bh(interfaces_table_lock);										\
-		{														\
-			interfaces_count = GetInterfacesCount();								\
-			if(interfaces_count > 0)										\
-			{													\
-				struct list_head* interfaces_table = GetInterfacesTable();					\
-				interfaces = kmalloc(interfaces_count * sizeof(int32_t), GFP_ATOMIC);				\
-				if(interfaces != NULL)										\
-				{												\
-					struct list_head *pos;									\
-					list_for_each(pos, interfaces_table) {							\
-						interfaces[i++] = ((struct interfaces_table_entry *)pos)->ifindex;		\
-					}											\
-				}												\
-				else												\
-					interfaces_count = 0;									\
-			}													\
-		}														\
-		read_unlock_bh(interfaces_table_lock);										\
-		for(i = 0; i < interfaces_count; i++)										\
-		{														\
-			uint32_t ifindex = interfaces[i];									\
-			DEV_VAR = dev_get_by_index(&init_net, ifindex);								\
-			if(DEV_VAR == NULL)											\
-			{													\
-				printk(KERN_INFO "SUPERMAN: Interfaces Iterator - \t\tNo device for interface %i.\n", ifindex);	\
-				continue;											\
-			}													\
+struct interfaces_table* GetInterfacesTable(void);
+
+
+#define INTERFACE_ITERATOR_START(DEV_VAR)																			\
+	{																												\
+		struct net* net = GetNet();																					\
+		struct interfaces_table* it = GetInterfacesTable();															\
+		int i = 0;																									\
+		int32_t* interfaces = NULL;																					\
+		read_lock_bh(&it->interfaces_table_lock);																	\
+		{																											\
+			if(it->interfaces_table_total > 0)																		\
+			{																										\
+				interfaces = kmalloc(it->interfaces_table_total * sizeof(int32_t), GFP_ATOMIC);						\
+				if(interfaces != NULL)																				\
+				{																									\
+					struct list_head *pos;																			\
+					list_for_each(pos, &it->interfaces_table_head) {													\
+						interfaces[i++] = ((struct interfaces_table_entry *)pos)->ifindex;							\
+					}																								\
+				}																									\
+			}																										\
+		}																											\
+		read_unlock_bh(&it->interfaces_table_lock);																	\
+		for(i = 0; i < it->interfaces_table_total; i++)																\
+		{																											\
+			uint32_t ifindex = interfaces[i];																		\
+			DEV_VAR = dev_get_by_index(net, ifindex);																\
+			if(DEV_VAR == NULL)																						\
+			{																										\
+				printk(KERN_INFO "SUPERMAN: Interfaces Iterator - \t\tNo device for interface %i.\n", ifindex);		\
+				continue;																							\
+			}																										\
+			else																									\
 			{
 
-#define INTERFACE_ITERATOR_END													\
-			}													\
-			dev_put(dev);												\
-		}														\
-		kfree(interfaces);												\
+#define INTERFACE_ITERATOR_END																						\
+			}																										\
+			dev_put(dev);																							\
+		}																											\
+		kfree(interfaces);																							\
+		put_net(net);																								\
 	}
 
 
-bool InitInterfacesTable(void);
-void DeInitInterfacesTable(void);
-void FlushInterfacesTable(void);
+bool InitInterfacesTable(struct superman_net* snet);
+void DeInitInterfacesTable(struct superman_net* snet);
 
+uint32_t GetInterfaceFromName(char* ifname);
 bool HasInterfacesTableEntry(uint32_t ifindex);
 bool AddInterfacesTableEntry(uint32_t ifindex);
-bool AddInterfacesTableEntryByName(char* ifname);
 bool RemoveInterfacesTableEntry(uint32_t ifindex);
-bool RemoveInterfacesTableEntryByName(char* ifname);
 
 int interfaces_table_info_proc_show(struct seq_file *m, void *v);
 

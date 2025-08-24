@@ -1,0 +1,94 @@
+#!/bin/bash
+
+echo Starting SUPERMAN configure_node...
+
+echo Determining node identifier...
+
+KERNEL_ARGS=$(cat /proc/cmdline)
+supermanid=$(for x in ${KERNEL_ARGS}; do [[ $x = supermanid=* ]] || continue; echo ${x#supermanid=}; done)
+echo "supermanid=${supermanid}" >> /etc/environment
+export supermanid=${supermanid}
+
+echo ... node is superman-${supermanid}
+
+echo Configuring the hostname...
+
+# Configure the hostname
+echo superman-${supermanid} >/etc/hostname
+/bin/hostname -F /etc/hostname
+
+echo Configuring network settings...
+
+if cat /sys/class/net/eth0/operstate | grep "up" > /dev/null; then
+	ip link set eth0 down
+fi
+
+# Configure the network
+ip route flush dev eth0
+ip addr flush dev eth0
+ip addr add 10.0.0.${supermanid}/24 brd 10.0.0.255 dev eth0
+ip route add default via 10.0.0.254 dev eth0
+ip link set dev eth0 mtu 2500
+
+#cat >> /etc/network/interfaces << EOF
+#
+#auto eth0
+#iface eth0 inet static
+#address 10.0.0.${supermanid}
+#netmask 255.255.255.0
+#gateway 10.0.0.254
+#mtu 2500
+#EOF
+
+#ifconfig eth0 promisc
+
+# Bring up the network
+ip link set eth0 up
+
+# Bring up the network
+while ! cat /sys/class/net/eth0/operstate | grep "up" > /dev/null; do
+	sleep .1
+done
+
+# Configue routing
+ip route add 10.0.0.1 dev eth0
+case ${supermanid} in
+2)
+	ip route add 10.0.0.3 dev eth0
+	ip route add 10.0.0.4 via 10.0.0.3
+	;;
+3)
+	ip route add 10.0.0.2 dev eth0
+	ip route add 10.0.0.4 dev eth0
+	;;
+4)
+	ip route add 10.0.0.2 via 10.0.0.3
+	ip route add 10.0.0.3 dev eth0
+	;;
+esac
+
+# Enable IP forwarding
+echo 1 >/proc/sys/net/ipv4/ip_forward
+
+# Configure our security credentials
+echo Generating the nodes security certificate...
+openssl genpkey -algorithm X25519 -out /etc/superman/superman-${supermanid}_x25519_privatekey.pem
+openssl pkey -in /etc/superman/superman-${supermanid}_x25519_privatekey.pem -pubout -out /etc/superman/superman-${supermanid}_x25519_publickey.pem
+openssl genpkey -algorithm Ed25519 -out /etc/superman/superman-${supermanid}_ed25519_privatekey.pem
+openssl req -new \
+  -subj "/C=UK/ST=London/L=Greenwich/O=University of Greenwich/OU=Faculty of Engineering and Science/CN=superman-${supermanid}.fes.gre.ac.uk" \
+  -key /etc/superman/superman-${supermanid}_ed25519_privatekey.pem \
+  -out /etc/superman/superman-${supermanid}_certreq.csr
+openssl x509 -req \
+  -in /etc/superman/superman-${supermanid}_certreq.csr \
+  -CA /etc/superman/ca_certificate.pem \
+  -CAkey /etc/superman/ca_privatekey.pem \
+  -force_pubkey /etc/superman/superman-${supermanid}_x25519_publickey.pem \
+  -out /etc/superman/superman-${supermanid}_certificate.pem \
+  -days 1024 -sha256
+
+# /bin isn't always in the PATH, so we need to add it
+export PATH=$PATH:/bin
+
+# Bring up the SUPERMAN kernel-module and daemon
+superman-up

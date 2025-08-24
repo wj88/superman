@@ -2,7 +2,15 @@ define aptInstall =
 bash -c '. ../test/common.sh; aptInstall $1;'
 endef
 
+BUILD ?= release  # Default to release if not specified
+
 CC=gcc
+
+ifeq ($(BUILD),debug)
+    CDEBUGFLAGS= -g
+else ifeq ($(BUILD),release)
+    CDEBUGFLAGS=
+endif
 CFLAGS= -Wno-write-strings `pkg-config --cflags libnl-3.0 libnl-genl-3.0 openssl`
 SRCS=$(shell find ../src/ -name '*.c')
 OBJS=$(notdir $(patsubst %.c,%.o,$(SRCS)))
@@ -24,11 +32,11 @@ main-build: pre-build
 
 $(OUTPUT): $(OBJS)
 	@echo '  LD      $(notdir $@)'
-	@$(CC) $(CFLAGS) -o $@ $^  $(LIBS)
+	@$(CC) $(CDEBUGFLAGS) $(CFLAGS) -o $@ $^  $(LIBS)
 
 %.o: ../src/%.c
 	@echo '  CC      $(notdir $^)'
-	@$(CC) $(CFLAGS) -c -o $@ $^
+	@$(CC) $(CDEBUGFLAGS) $(CFLAGS) -c -o $@ $^
 
 clean:
 	-rm -f *.o ../src/*.o *~ $(OUTPUT) core

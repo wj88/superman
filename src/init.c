@@ -2,6 +2,7 @@
 
 #include "superman.h"
 #include "init.h"
+#include "net.h"
 #include "security.h"
 #include "security_table.h"
 #include "interfaces_table.h"
@@ -16,33 +17,25 @@ Init and DeInit are our modules entry points.
 
 int Init(void)
 {
-	printk(KERN_INFO "SUPERMAN: module is being loaded.\n");
+	//(KERN_INFO "SUPERMAN: module is being loaded.\n");
 	if(InitProc())
-	{	
-		if(InitQueue())
+	{
+		if(InitNet())
 		{
-			if(InitSecurityTable())
+			if(InitNetlink())
 			{
-				if(InitInterfacesTable())
+				if(InitSecurity())
 				{
-					if(InitNetlink())
+					if(InitNetFilter())
 					{
-						if(InitSecurity())
-						{
-							if(InitNetFilter())
-							{
-								printk(KERN_INFO "SUPERMAN: module loaded successfully.\n");
-								return 0;
-							}
-							DeInitSecurity();
-						}
-						DeInitNetlink();
+						printk(KERN_INFO "SUPERMAN: module loaded successfully.\n");
+						return 0;
 					}
-					DeInitInterfacesTable();
+					DeInitSecurity();
 				}
-				DeInitSecurityTable();
+				DeInitNetlink();
 			}
-			DeInitQueue();
+			DeInitNet();
 		}
 		DeInitProc();
 	}
@@ -55,11 +48,9 @@ void DeInit(void)
 	DeInitNetFilter();
 	DeInitNetlink();
 	DeInitSecurity();
-	DeInitInterfacesTable();
-	DeInitSecurityTable();
-	DeInitQueue();
+	DeInitNet();
 	DeInitProc();
-	printk(KERN_INFO "SUPERMAN: module is being unloaded.\n");
+	printk(KERN_INFO "SUPERMAN: module unloaded.\n");
 }
 
 module_init(Init);

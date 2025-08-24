@@ -38,15 +38,14 @@ static int version_proc_show(struct seq_file *m, void *v)
 
 static int version_proc_open(struct inode *inode, struct file *file)
 {
-    return single_open(file, version_proc_show, NULL);
+    return single_open(file, version_proc_show, inode->i_private);
 }
 
-static const struct file_operations version_proc_fops = {
-    .owner      = THIS_MODULE,
-    .open       = version_proc_open,
-    .read       = seq_read,
-    .llseek     = seq_lseek,
-    .release    = single_release
+static const struct proc_ops version_proc_fops = {
+    .proc_open       = version_proc_open,
+    .proc_read       = seq_read,
+    .proc_lseek      = seq_lseek,
+    .proc_release    = single_release
 };
 
 /*
@@ -59,12 +58,11 @@ static int queue_info_proc_open(struct inode *inode, struct file *file)
     return single_open(file, queue_info_proc_show, NULL);
 }
 
-static const struct file_operations queue_info_proc_fops = {
-    .owner      = THIS_MODULE,
-    .open       = queue_info_proc_open,
-    .read       = seq_read,
-    .llseek     = seq_lseek,
-    .release    = single_release
+static const struct proc_ops queue_info_proc_fops = {
+    .proc_open		= queue_info_proc_open,
+    .proc_read  	= seq_read,
+    .proc_lseek 	= seq_lseek,
+    .proc_release   = single_release
 };
 
 /*
@@ -76,12 +74,11 @@ static int security_table_info_proc_open(struct inode *inode, struct file *file)
     return single_open(file, security_table_info_proc_show, NULL);
 }
 
-static const struct file_operations security_table_info_proc_fops = {
-    .owner      = THIS_MODULE,
-    .open       = security_table_info_proc_open,
-    .read       = seq_read,
-    .llseek     = seq_lseek,
-    .release    = single_release
+static const struct proc_ops security_table_info_proc_fops = {
+    .proc_open       = security_table_info_proc_open,
+    .proc_read       = seq_read,
+    .proc_lseek      = seq_lseek,
+    .proc_release    = single_release
 };
 
 /*
@@ -93,12 +90,11 @@ static int interfaces_table_info_proc_open(struct inode *inode, struct file *fil
     return single_open(file, interfaces_table_info_proc_show, NULL);
 }
 
-static const struct file_operations interfaces_table_info_proc_fops = {
-    .owner      = THIS_MODULE,
-    .open       = interfaces_table_info_proc_open,
-    .read       = seq_read,
-    .llseek     = seq_lseek,
-    .release    = single_release
+static const struct proc_ops interfaces_table_info_proc_fops = {
+    .proc_open       = interfaces_table_info_proc_open,
+    .proc_read       = seq_read,
+    .proc_lseek      = seq_lseek,
+    .proc_release    = single_release
 };
 
 /*

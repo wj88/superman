@@ -113,21 +113,25 @@ createBridge()
 {
 	local BRIDGE_IF="$1"
 	local IP="$2"
-	if ! brctl show | grep ${BRIDGE_IF} > /dev/null ; then
+	if ! ip link show type bridge | grep ${BRIDGE_IF} > /dev/null ; then
 		echo Creating network bridge ${BRIDGE_IF}...
-		sudo brctl addbr ${BRIDGE_IF}		
-		sudo ifconfig ${BRIDGE_IF} ${IP} netmask 255.255.255.0 up
+		sudo ip link add name ${BRIDGE_IF} type bridge
+		sudo ip addr add ${IP}/24 brd 10.0.0.255 dev ${BRIDGE_IF}
+		sudo ip link set dev ${BRIDGE_IF} up
+		#sudo brctl addbr ${BRIDGE_IF}
+		#sudo ifconfig ${BRIDGE_IF} ${IP} netmask 255.255.255.0 up
 	fi
 }
 
 removeBridge()
 {
 	local BRIDGE_IF="$1"
-	if brctl show | grep ${BRIDGE_IF} > /dev/null ; then
+	if ip link show type bridge | grep ${BRIDGE_IF} > /dev/null ; then
 		echo Removing network bridge ${BRIDGE_IF}...
-		sudo ip link set dev ${BRIDGE_IF} down	
-		brctl show ${BRIDGE_IF} | tail -n +2 | awk '//{print $4}' | xargs -I '{}' brctl delif ${BRIDGE_IF} {}
-		brctl delbr ${BRIDGE_IF}
+		sudo ip link set dev ${BRIDGE_IF} down
+		sudo ip link delete dev ${BRIDGE_IF}
+		#brctl show ${BRIDGE_IF} | tail -n +2 | awk '//{print $4}' | xargs -I '{}' brctl delif ${BRIDGE_IF} {}
+		#brctl delbr ${BRIDGE_IF}
 	fi
 }
 
@@ -144,16 +148,18 @@ bridgeTap()
 	local TAP_IF="$1"
 	local BRIDGE_IF="$2"
 	sudo ip link set dev ${TAP_IF} mtu 2500
-	sudo brctl addif ${BRIDGE_IF} ${TAP_IF}
+	#sudo brctl addif ${BRIDGE_IF} ${TAP_IF}
 	sudo ip link set dev ${TAP_IF} up
+	sudo ip link set dev ${TAP_IF} master ${BRIDGE_IF}
 }
 
 unbridgeTap()
 {
 	local TAP_IF="$1"
 	local BRIDGE_IF="$2"
+	sudo ip link set dev ${TAP_IF} nomaster
 	sudo ip link set dev ${TAP_IF} down
-	sudo brctl delif ${BRIDGE_IF} ${TAP_IF}
+	#sudo brctl delif ${BRIDGE_IF} ${TAP_IF}
 }
 
 createTap()
@@ -162,7 +168,7 @@ createTap()
 	local BRIDGE_IF="$2"
 	if ! ip tuntap | grep ${TAP_IF} > /dev/null ; then
 		echo Creating a new network tap ${TAP_IF}...
-		sudo ip tuntap add mode tap ${TAP_IF}
+		sudo ip tuntap add ${TAP_IF} mode tap user ${USER}
 		bridgeTap ${TAP_IF} ${BRIDGE_IF}
 	fi
 }
@@ -174,8 +180,9 @@ removeTap()
 	if ip tuntap | grep ${TAP_IF} > /dev/null ; then
 		echo Removing network tap ${TAP_IF}...
 		sudo ip link set dev ${TAP_IF} down
-		sudo brctl delif ${BRIDGE_IF} ${TAP_IF}
+		sudo ip addr flush dev ${TAP_IF}
 		sudo ip tuntap del mode tap ${TAP_IF}
+		#sudo brctl delif ${BRIDGE_IF} ${TAP_IF}
 	fi
 }
 

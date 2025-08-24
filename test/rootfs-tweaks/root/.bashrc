@@ -98,9 +98,16 @@ fi
 #    . /etc/bash_completion
 #fi
 
+# Configuring the IP address and bring up the interface.
+#export supermanid=$(cat /proc/cmdline | tr ' ' '\n' | grep supermanid | cut -d'=' -f2)
+#ip addr add 10.0.0.${supermanid}/24 dev eth0
+#ip link set eth0 up
+#
+#superman-up
 
 echo "7" > /proc/sys/kernel/printk
-tail -f /var/log/supermand.log &
+#tail -f /var/log/supermand.log &
+
 #superman-down
 #superman-up
 
